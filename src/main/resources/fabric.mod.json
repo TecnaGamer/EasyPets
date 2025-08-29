@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "followersloadchunks",
+  "version": "${version}",
+  "name": "FollowersLoadChunks",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/followersloadchunks/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "org.tecna.followersloadchunks.Followersloadchunks"
+    ]
+  },
+  "mixins": [
+    "followersloadchunks.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": ">=${minecraft_version}"
+  }
+}
