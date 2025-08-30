@@ -41,13 +41,17 @@ public class ServerPlayerEntityMixin implements ChunkLoadingPetTracker {
                 // Find the pet to get its current data
                 for (ServerWorld world : player.getServer().getWorlds()) {
                     if (world.getEntity(petUUID) instanceof TameableEntity pet) {
-                        if (pet.isTamed() && pet.getOwner() == player && !pet.isSitting()) {
+                        // For 1.21.7, use the correct method names
+                        if (pet.isTamed() && pet.getOwner() == player && !pet.isInSittingPose()) {
                             WriteView writeView = listView.add();
                             writeView.putLong("pet_uuid_most", petUUID.getMostSignificantBits());
                             writeView.putLong("pet_uuid_least", petUUID.getLeastSignificantBits());
                             writeView.putString("world", pet.getWorld().getRegistryKey().getValue().toString());
-                            writeView.putInt("chunk_x", pet.getChunkPos().x);
-                            writeView.putInt("chunk_z", pet.getChunkPos().z);
+
+                            // Use getBlockPos().getChunkPos() for 1.21.7
+                            ChunkPos chunkPos = new ChunkPos(pet.getBlockPos());
+                            writeView.putInt("chunk_x", chunkPos.x);
+                            writeView.putInt("chunk_z", chunkPos.z);
                             writeView.putString("pet_type", pet.getClass().getSimpleName());
                         }
                         break;

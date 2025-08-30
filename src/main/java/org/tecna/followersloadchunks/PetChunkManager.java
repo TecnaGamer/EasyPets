@@ -6,10 +6,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.ChunkPos;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PetChunkManager {
@@ -60,46 +57,63 @@ public class PetChunkManager {
     /**
      * Clean up all pet chunk tickets for a specific player when they disconnect
      */
-    public static void cleanupPlayerPetTickets(ServerPlayerEntity player) {
-        int removedTickets = 0;
-        int totalTickets = activePetTickets.size();
+    public static synchronized void cleanupPlayerPetTickets(ServerPlayerEntity player) {
+        try {
+            int totalTickets = activePetTickets.size();
 
-        activePetTickets.entrySet().removeIf(entry -> {
-            UUID petUUID = entry.getKey();
-            ChunkPos chunkPos = entry.getValue();
+            // Create a list of tickets to remove to avoid concurrent modification
+            List<UUID> ticketsToRemove = new ArrayList<>();
 
-            // Find the pet to check if it belongs to this player
-            for (ServerWorld world : player.getServer().getWorlds()) {
-                Entity entity = world.getEntity(petUUID);
-                if (entity instanceof TameableEntity pet && pet.getOwner() == player) {
-                    world.getChunkManager().removeTicket(
-                            PetChunkTickets.PET_TICKET_TYPE,
-                            chunkPos,
-                            2
-                    );
-                    previousSittingState.remove(petUUID);
-                    return true; // Remove from map
+            for (Map.Entry<UUID, ChunkPos> entry : activePetTickets.entrySet()) {
+                UUID petUUID = entry.getKey();
+                ChunkPos chunkPos = entry.getValue();
+
+                boolean shouldRemove = false;
+
+                // Find the pet to check if it belongs to this player
+                for (ServerWorld world : player.getServer().getWorlds()) {
+                    try {
+                        Entity entity = world.getEntity(petUUID);
+                        if (entity instanceof TameableEntity pet && pet.getOwner() == player) {
+                            world.getChunkManager().removeTicket(
+                                    PetChunkTickets.PET_TICKET_TYPE,
+                                    chunkPos,
+                                    2
+                            );
+                            shouldRemove = true;
+                            break;
+                        }
+                    } catch (Exception e) {
+                        // If we can't access the pet, assume it belongs to this player and clean up
+                        System.out.println("[FollowersLoadChunks] Error checking pet ownership during cleanup: " + e.getMessage());
+                        shouldRemove = true;
+                        break;
+                    }
+                }
+
+                if (shouldRemove) {
+                    ticketsToRemove.add(petUUID);
                 }
             }
-            return false; // Keep in map
-        });
 
-        int remainingTickets = activePetTickets.size();
-        int actualRemoved = totalTickets - remainingTickets;
-
-        // Send debug info to player if they're still connected
-        if (actualRemoved > 0) {
-            try {
-                player.sendMessage(net.minecraft.text.Text.of("§7[Debug] Cleaned up " + actualRemoved + " pet chunk tickets on disconnect"));
-            } catch (Exception e) {
-                // Player already disconnected, can't send message
+            // Remove tickets from maps
+            for (UUID petUUID : ticketsToRemove) {
+                activePetTickets.remove(petUUID);
+                previousSittingState.remove(petUUID);
             }
-        }
 
-        // Also log to server console
-        System.out.println("[FollowersLoadChunks] Player " + player.getGameProfile().getName() +
-                " disconnected. Removed " + actualRemoved + " pet tickets. " +
-                remainingTickets + " tickets still active.");
+            int actualRemoved = ticketsToRemove.size();
+            int remainingTickets = activePetTickets.size();
+
+            // Log to server console
+            System.out.println("[FollowersLoadChunks] Player " + player.getGameProfile().getName() +
+                    " disconnected. Removed " + actualRemoved + " pet tickets. " +
+                    remainingTickets + " tickets still active.");
+
+        } catch (Exception e) {
+            System.out.println("[FollowersLoadChunks] Error during player cleanup: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -202,8 +216,13 @@ public class PetChunkManager {
 
                     // Check if this pet should be loading chunks according to our tracker
                     if (tracker.followersLoadChunks$isPetChunkLoading(petUUID)) {
+                        validatedPets++;
+
+                        // Check if pet is currently sitting - use isInSittingPose() for 1.21.7
+                        boolean currentSitting = pet.isInSittingPose();
+
                         // Verify the pet is actually accessible and not sitting
-                        if (pet.isTamed() && !pet.isSitting()) {
+                        if (pet.isTamed() && !currentSitting) {
                             // Check if we have an active ticket for this pet
                             if (isPetActivelyLoadingChunks(petUUID)) {
                                 validatedPets++;

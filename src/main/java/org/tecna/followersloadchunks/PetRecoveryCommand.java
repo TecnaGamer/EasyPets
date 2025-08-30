@@ -1,8 +1,13 @@
 package org.tecna.followersloadchunks;
 
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.entity.passive.TameableEntity;
 import net.minecraft.nbt.*;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -12,6 +17,9 @@ import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
 import net.minecraft.world.storage.StorageKey;
+import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
+import org.tecna.followersloadchunks.PetChunkManager;
+import org.tecna.followersloadchunks.PetChunkTickets;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -258,8 +266,9 @@ public class PetRecoveryCommand {
             PetChunkManager.cleanupPlayerPetTickets(player);
         }
 
-        source.sendMessage(Text.of("§a[Debug] Force cleaned up " + removedTickets + " active pet chunk tickets"));
-        source.sendMessage(Text.of("§7Remaining active tickets: " + PetChunkManager.getActivePetTicketCount()));
+        source.sendMessage(Text.of("§e=== Forced Cleanup Complete ==="));
+        source.sendMessage(Text.of("§7Removed: §c" + removedTickets + " chunk tickets"));
+        source.sendMessage(Text.of("§7Remaining: §a" + PetChunkManager.getActivePetTicketCount() + " tickets"));
 
         return 1;
     }
@@ -268,30 +277,40 @@ public class PetRecoveryCommand {
         ServerCommandSource source = context.getSource();
 
         int activeTickets = PetChunkManager.getActivePetTicketCount();
-        source.sendMessage(Text.of("§e=== Pet Chunk Ticket Debug Info ==="));
-        source.sendMessage(Text.of("§7Active pet chunk tickets: §f" + activeTickets));
+        source.sendMessage(Text.of("§e=== Active Chunk Tickets ==="));
+        source.sendMessage(Text.of("§7Total tickets: §f" + activeTickets));
 
         if (activeTickets > 0) {
-            source.sendMessage(Text.of("§7Detailed ticket info:"));
+            source.sendMessage(Text.of(""));
+
+            AtomicInteger count = new AtomicInteger(0);
             PetChunkManager.getActivePetTickets().forEach((petUUID, chunkPos) -> {
+                count.incrementAndGet();
+                if (count.get() > 15) {
+                    if (count.get() == 16) {
+                        source.sendMessage(Text.of("§7... and " + (activeTickets - 15) + " more"));
+                    }
+                    return;
+                }
+
                 // Try to find what this ticket belongs to
-                String info = "§f  UUID: " + petUUID.toString().substring(0, 8) + "... at chunk " + chunkPos;
+                String info = "§f" + petUUID.toString().substring(0, 8) + "... §7at §6" + chunkPos;
 
                 // Try to find the pet
                 for (ServerWorld world : source.getServer().getWorlds()) {
                     net.minecraft.entity.Entity entity = world.getEntity(petUUID);
                     if (entity instanceof net.minecraft.entity.passive.TameableEntity pet) {
                         String petName = pet.hasCustomName() ? pet.getCustomName().getString() : pet.getClass().getSimpleName();
-                        String ownerName = "Unknown";
-                        if (pet.getOwner() instanceof ServerPlayerEntity playerOwner) {
-                            ownerName = playerOwner.getGameProfile().getName();
-                        }
-                        info += " §7(" + petName + " owned by " + ownerName + ")";
+                        String ownerName = pet.getOwner() instanceof ServerPlayerEntity owner ? owner.getGameProfile().getName() : "Unknown";
+                        String worldName = world.getRegistryKey().getValue().toString().replace("minecraft:", "");
+                        info = "§f" + petName + " §7(§6" + ownerName + "§7) in §e" + worldName;
                         break;
                     }
                 }
-                source.sendMessage(Text.of(info));
+                source.sendMessage(Text.of("  • " + info));
             });
+        } else {
+            source.sendMessage(Text.of("§7No active tickets"));
         }
 
         return 1;
@@ -304,7 +323,10 @@ public class PetRecoveryCommand {
             ServerPlayerEntity targetPlayer = net.minecraft.command.argument.EntityArgumentType.getPlayer(context, "playerName");
 
             // Clean up their tickets
+            int beforeCount = PetChunkManager.getActivePetTicketCount();
             PetChunkManager.cleanupPlayerPetTickets(targetPlayer);
+            int afterCount = PetChunkManager.getActivePetTicketCount();
+            int removedCount = beforeCount - afterCount;
 
             // Clear their persistent data if possible
             if (targetPlayer instanceof ChunkLoadingPetTracker tracker) {
@@ -319,11 +341,15 @@ public class PetRecoveryCommand {
                 }
             }
 
-            source.sendMessage(Text.of("§a[Debug] Reset all pet chunk loading data for " + targetPlayer.getGameProfile().getName()));
-            targetPlayer.sendMessage(Text.of("§e[FollowersLoadChunks] Your pet chunk loading data has been reset by an admin"));
+            source.sendMessage(Text.of("§e=== Player Reset Complete ==="));
+            source.sendMessage(Text.of("§7Player: §f" + targetPlayer.getGameProfile().getName()));
+            source.sendMessage(Text.of("§7Removed: §c" + removedCount + " chunk tickets"));
+            source.sendMessage(Text.of("§7Cleared: §aAll persistent pet data"));
+
+            targetPlayer.sendMessage(Text.of("§7[FollowersLoadChunks] Your pet chunk loading data has been reset by an admin"));
 
         } catch (Exception e) {
-            source.sendError(Text.of("Player not found or error occurred: " + e.getMessage()));
+            source.sendError(Text.of("§cPlayer not found or error occurred: " + e.getMessage()));
         }
 
         return 1;
@@ -332,17 +358,24 @@ public class PetRecoveryCommand {
     private static int executeDebugVersion(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
-        source.sendMessage(Text.of("§e=== FollowersLoadChunks Debug Info ==="));
-        source.sendMessage(Text.of("§7Mod Version: §fDevelopment Build"));
-        source.sendMessage(Text.of("§7Data Format Version: §f1"));
-        source.sendMessage(Text.of("§7Active Pet Tickets: §f" + PetChunkManager.getActivePetTicketCount()));
+        source.sendMessage(Text.of("§e=== FollowersLoadChunks Info ==="));
+        source.sendMessage(Text.of("§7Version: §fDevelopment Build"));
+        source.sendMessage(Text.of("§7Data Format: §fv1"));
+        source.sendMessage(Text.of("§7Active Tickets: §f" + PetChunkManager.getActivePetTicketCount()));
+        source.sendMessage(Text.of(""));
 
-        // Show player data versions
+        // Show online players with pet data
         source.sendMessage(Text.of("§7Online Players:"));
+        int playersWithData = 0;
         for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
             if (player instanceof ChunkLoadingPetTracker) {
-                source.sendMessage(Text.of("§f  " + player.getGameProfile().getName() + " §7- Data loaded"));
+                playersWithData++;
+                source.sendMessage(Text.of("  • §f" + player.getGameProfile().getName() + " §a✓"));
             }
+        }
+
+        if (playersWithData == 0) {
+            source.sendMessage(Text.of("§7No players with pet data"));
         }
 
         return 1;
@@ -638,10 +671,10 @@ public class PetRecoveryCommand {
     }
 
     private static String getRestrictedPetStatus(PetInfo pet) {
-        if (pet.isLeashed) {
-            return " §c[LEASHED]";
-        } else if (pet.inVehicle) {
+        if (pet.inVehicle) {
             return " §c[IN VEHICLE]";
+        } else if (pet.isLeashed) {
+            return " §c[LEASHED]";
         }
         return "";
     }
@@ -916,22 +949,55 @@ public class PetRecoveryCommand {
 
             NbtCompound entity = entityOpt.get();
 
-            // Check if this is a tameable entity owned by our player
+            // Check if this is a direct tameable entity owned by our player
             if (isTameablePetOwnedByPlayer(entity, playerUUID)) {
                 PetInfo petInfo = createPetInfoFromNBT(entity, chunkPos, world);
                 if (petInfo != null) {
-                    String entityId = entity.getString("id", "unknown");
+                    categorizePet(petInfo, standingPets, sittingPets, roamingPets);
+                }
+            }
 
-                    // Categorize pets
-                    if (ROAMING_PET_TYPES.contains(entityId)) {
-                        roamingPets.add(petInfo);
-                    } else if (petInfo.sitting) {
-                        sittingPets.add(petInfo);
-                    } else {
-                        standingPets.add(petInfo);
+            // Also check if this entity has passengers (vehicles with pets)
+            if (entity.contains("Passengers")) {
+                Optional<NbtList> passengersOpt = entity.getList("Passengers");
+                if (passengersOpt.isPresent()) {
+                    NbtList passengers = passengersOpt.get();
+
+                    for (int j = 0; j < passengers.size(); j++) {
+                        Optional<NbtCompound> passengerOpt = passengers.getCompound(j);
+                        if (passengerOpt.isPresent()) {
+                            NbtCompound passenger = passengerOpt.get();
+
+                            // Check if this passenger is a tameable pet owned by our player
+                            if (isTameablePetOwnedByPlayer(passenger, playerUUID)) {
+                                PetInfo petInfo = createPetInfoFromNBT(passenger, chunkPos, world);
+                                if (petInfo != null) {
+                                    // Mark this pet as being in a vehicle
+                                    PetInfo vehiclePetInfo = new PetInfo(
+                                            petInfo.uuid, petInfo.type, petInfo.customName,
+                                            petInfo.x, petInfo.y, petInfo.z, petInfo.chunkPos,
+                                            petInfo.world, petInfo.sitting, petInfo.isLeashed, true // inVehicle = true
+                                    );
+                                    categorizePet(vehiclePetInfo, standingPets, sittingPets, roamingPets);
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private static void categorizePet(PetInfo petInfo, List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets) {
+        String entityId = petInfo.type;
+
+        // Categorize pets
+        if (ROAMING_PET_TYPES.contains(entityId)) {
+            roamingPets.add(petInfo);
+        } else if (petInfo.sitting) {
+            sittingPets.add(petInfo);
+        } else {
+            standingPets.add(petInfo);
         }
     }
 
@@ -976,10 +1042,50 @@ public class PetRecoveryCommand {
         // Check if pet is leashed
         boolean isLeashed = entity.contains("leash");
 
-        // Check if pet is in a vehicle (harder to detect from NBT alone, would need to check for vehicle passengers)
-        boolean inVehicle = false; // This would require checking parent entities with Passengers arrays
+        // Check if pet is in a vehicle by scanning all entities for vehicles with this pet as passenger
+        boolean inVehicle = false;
+        // This is expensive so we'll skip it for NBT-based detection for now
+        // Vehicle detection will be done during live entity scanning
 
         return new PetInfo(petUUID, entityId, customName, x, y, z, chunkPos, world, sitting, isLeashed, inVehicle);
+    }
+
+    // Enhanced method to scan for pets in vehicles within loaded chunks
+    private static void scanLoadedEntitiesForVehicles(ServerPlayerEntity player, List<PetInfo> standingPets) {
+        for (ServerWorld world : player.getServer().getWorlds()) {
+            // Look for vehicles with pet passengers
+            for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                if (entity.hasPassengers()) {
+                    for (net.minecraft.entity.Entity passenger : entity.getPassengerList()) {
+                        if (passenger instanceof TameableEntity pet &&
+                                pet.isTamed() &&
+                                pet.getOwner() == player) {
+
+                            // Mark existing standing pets as being in vehicles
+                            UUID petUUID = pet.getUuid();
+                            for (PetInfo petInfo : standingPets) {
+                                if (petInfo.uuid.equals(petUUID)) {
+                                    // Update the pet info to show it's in a vehicle
+                                    // Since PetInfo is immutable, we need to create a new instance
+                                    PetInfo updatedPetInfo = new PetInfo(
+                                            petInfo.uuid, petInfo.type, petInfo.customName,
+                                            petInfo.x, petInfo.y, petInfo.z, petInfo.chunkPos,
+                                            petInfo.world, petInfo.sitting, petInfo.isLeashed, true
+                                    );
+
+                                    // Replace in list
+                                    int index = standingPets.indexOf(petInfo);
+                                    if (index >= 0) {
+                                        standingPets.set(index, updatedPetInfo);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static boolean isTameablePetOwnedByPlayer(NbtCompound entity, UUID playerUUID) {
@@ -1094,8 +1200,9 @@ public class PetRecoveryCommand {
         final double x, y, z;
         final String worldName;
         final boolean sitting;
+        final String status;
 
-        PetDetails(UUID uuid, String type, String displayName, double x, double y, double z, String worldName, boolean sitting) {
+        PetDetails(UUID uuid, String type, String displayName, double x, double y, double z, String worldName, boolean sitting, String status) {
             this.uuid = uuid;
             this.type = type;
             this.displayName = displayName;
@@ -1104,6 +1211,12 @@ public class PetRecoveryCommand {
             this.z = z;
             this.worldName = worldName;
             this.sitting = sitting;
+            this.status = status;
+        }
+
+        // Constructor for backwards compatibility
+        PetDetails(UUID uuid, String type, String displayName, double x, double y, double z, String worldName, boolean sitting) {
+            this(uuid, type, displayName, x, y, z, worldName, sitting, "");
         }
 
         String getLocationString() {
