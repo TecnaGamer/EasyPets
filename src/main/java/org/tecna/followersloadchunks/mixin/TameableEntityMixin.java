@@ -4,8 +4,10 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.passive.TameableEntity;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.storage.WriteView;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -15,8 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
 import org.tecna.followersloadchunks.PetChunkManager;
 import org.tecna.followersloadchunks.PetChunkTickets;
+import org.tecna.followersloadchunks.IndyPetsHelper;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Mixin(LivingEntity.class)
@@ -30,75 +32,96 @@ public class TameableEntityMixin {
         if (entity instanceof TameableEntity pet && !pet.getWorld().isClient) {
             // Add synchronization to prevent concurrent modification with async ticking mods
             synchronized (this) {
-                if (pet.isTamed() && pet.getOwner() instanceof ServerPlayerEntity owner) {
-                    UUID petUUID = pet.getUuid();
-                    boolean currentSitting = pet.isSitting();
-                    Boolean previousSitting = PetChunkManager.getPreviousSittingState(petUUID);
-
-                    // Update previous state
-                    PetChunkManager.updatePreviousSittingState(petUUID, currentSitting);
-
-                    // Check if pet is restricted (sitting, leashed, or in vehicle)
-                    boolean isRestricted = currentSitting ||
-                            isLeashed(pet) ||
-                            isInVehicle(pet);
-
-                    // Pet should load chunks only if owner is online AND in same dimension AND not restricted
-                    boolean sameWorldAsOwner = pet.getWorld().getRegistryKey().equals(owner.getWorld().getRegistryKey());
-                    boolean ownerOnline = !owner.isDisconnected();
-                    boolean shouldLoadChunks = !isRestricted && ownerOnline && sameWorldAsOwner;
-
-                    boolean isCurrentlyLoading = PetChunkManager.isPetActivelyLoadingChunks(petUUID);
-
-                    // Handle state changes
-                    if (previousSitting != null && previousSitting != currentSitting) {
-                        // Pet sitting state changed
-                        if (currentSitting && isCurrentlyLoading) {
-                            // Pet just sat down - stop loading chunks immediately
-                            stopLoadingChunks(pet, owner);
-                            return;
-                        } else if (!currentSitting && !isCurrentlyLoading && ownerOnline && sameWorldAsOwner && !isLeashed(pet) && !isInVehicle(pet)) {
-                            // Pet just stood up - start loading chunks
-                            startLoadingChunks(pet, owner);
-                            return;
-                        }
+                try {
+                    // Null safety checks
+                    if (pet.getWorld() == null || pet.getOwner() == null) {
+                        return;
                     }
 
-                    if (shouldLoadChunks) {
-                        ChunkPos currentChunk = new ChunkPos(pet.getBlockPos());
-                        ChunkPos oldChunk = PetChunkManager.getActivePetTickets().get(petUUID);
-
-                        // Update if not loading chunks yet, or moved to a different chunk
-                        if (!isCurrentlyLoading) {
-                            startLoadingChunks(pet, owner);
-                        } else if (oldChunk != null && !oldChunk.equals(currentChunk)) {
-                            // Pet moved to different chunk - update chunk ticket location
-                            updateChunkLocation(pet, owner, oldChunk, currentChunk);
+                    if (pet.isTamed() && pet.getOwner() instanceof ServerPlayerEntity owner) {
+                        // Additional null checks for server state
+                        if (owner.getServer() == null || owner.getWorld() == null) {
+                            return;
                         }
-                    } else if (isCurrentlyLoading) {
-                        // Pet should stop loading chunks (sitting, owner offline, different dimension, or restricted)
-                        stopLoadingChunks(pet, owner);
-                    }
-                } else if (entity instanceof TameableEntity) {
-                    // Pet is not tamed or owner is null - clean up any tickets
-                    UUID petUUID = entity.getUuid();
-                    if (PetChunkManager.isPetActivelyLoadingChunks(petUUID)) {
-                        ChunkPos chunkPos = PetChunkManager.removeActivePetTicket(petUUID);
-                        if (chunkPos != null) {
-                            try {
-                                ServerWorld world = (ServerWorld) entity.getWorld();
-                                world.getChunkManager().removeTicket(
-                                        PetChunkTickets.PET_TICKET_TYPE,
-                                        chunkPos,
-                                        2
-                                );
-                            } catch (Exception e) {
-                                // Ignore errors during cleanup to prevent crashes
-                                System.out.println("[FollowersLoadChunks] Error during cleanup: " + e.getMessage());
+
+                        UUID petUUID = pet.getUuid();
+                        if (petUUID == null) {
+                            return;
+                        }
+
+                        boolean currentSitting = pet.isSitting();
+                        Boolean previousSitting = PetChunkManager.getPreviousSittingState(petUUID);
+
+                        // Update previous state
+                        PetChunkManager.updatePreviousSittingState(petUUID, currentSitting);
+
+                        // Check if pet is restricted (sitting, leashed, in vehicle, or independent)
+                        boolean isRestricted = currentSitting ||
+                                isLeashed(pet) ||
+                                isInVehicle(pet) ||
+                                isIndependent(pet);
+
+                        // Pet should load chunks only if owner is online AND in same dimension AND not restricted
+                        boolean sameWorldAsOwner = pet.getWorld().getRegistryKey().equals(owner.getWorld().getRegistryKey());
+                        boolean ownerOnline = !owner.isDisconnected();
+                        boolean shouldLoadChunks = !isRestricted && ownerOnline && sameWorldAsOwner;
+
+                        boolean isCurrentlyLoading = PetChunkManager.isPetActivelyLoadingChunks(petUUID);
+
+                        // Handle state changes
+                        if (previousSitting != null && previousSitting != currentSitting) {
+                            // Pet sitting state changed
+                            if (currentSitting && isCurrentlyLoading) {
+                                // Pet just sat down - stop loading chunks immediately
+                                stopLoadingChunks(pet, owner);
+                                return;
+                            } else if (!currentSitting && !isCurrentlyLoading && ownerOnline && sameWorldAsOwner && !isLeashed(pet) && !isInVehicle(pet) && !isIndependent(pet)) {
+                                // Pet just stood up - start loading chunks (only if not independent)
+                                startLoadingChunks(pet, owner);
+                                return;
                             }
                         }
-                        PetChunkManager.removeSittingStateTracking(petUUID);
+
+                        if (shouldLoadChunks) {
+                            ChunkPos currentChunk = new ChunkPos(pet.getBlockPos());
+                            ChunkPos oldChunk = PetChunkManager.getActivePetTickets().get(petUUID);
+
+                            // Update if not loading chunks yet, or moved to a different chunk
+                            if (!isCurrentlyLoading) {
+                                startLoadingChunks(pet, owner);
+                            } else if (oldChunk != null && !oldChunk.equals(currentChunk)) {
+                                // Pet moved to different chunk - update chunk ticket location
+                                updateChunkLocation(pet, owner, oldChunk, currentChunk);
+                            }
+                        } else if (isCurrentlyLoading) {
+                            // Pet should stop loading chunks (sitting, owner offline, different dimension, restricted, or independent)
+                            stopLoadingChunks(pet, owner);
+                        }
+                    } else if (entity instanceof TameableEntity) {
+                        // Pet is not tamed or owner is null - clean up any tickets
+                        UUID petUUID = entity.getUuid();
+                        if (petUUID != null && PetChunkManager.isPetActivelyLoadingChunks(petUUID)) {
+                            ChunkPos chunkPos = PetChunkManager.removeActivePetTicket(petUUID);
+                            if (chunkPos != null && entity.getWorld() instanceof ServerWorld world) {
+                                try {
+                                    if (world.getChunkManager() != null) {
+                                        world.getChunkManager().removeTicket(
+                                                PetChunkTickets.PET_TICKET_TYPE,
+                                                chunkPos,
+                                                2
+                                        );
+                                    }
+                                } catch (Exception e) {
+                                    // Ignore errors during cleanup to prevent crashes
+                                    System.out.println("[FollowersLoadChunks] Error during cleanup: " + e.getMessage());
+                                }
+                            }
+                            PetChunkManager.removeSittingStateTracking(petUUID);
+                        }
                     }
+                } catch (Exception e) {
+                    // Catch any unexpected errors to prevent crashes during server startup
+                    System.out.println("[FollowersLoadChunks] Error in pet tick processing: " + e.getMessage());
                 }
             }
         }
@@ -122,6 +145,15 @@ public class TameableEntityMixin {
         }
     }
 
+    // Helper method to check if pet is independent (IndyPets integration)
+    private boolean isIndependent(TameableEntity pet) {
+        // Only check for independence if IndyPets is actually installed
+        if (!IndyPetsHelper.isIndyPetsLoaded()) {
+            return false;
+        }
+        return IndyPetsHelper.isPetIndependent(pet);
+    }
+
     @Inject(method = "onDeath", at = @At("HEAD"))
     private void onEntityDeath(DamageSource damageSource, CallbackInfo ci) {
         LivingEntity entity = (LivingEntity) (Object) this;
@@ -134,62 +166,82 @@ public class TameableEntityMixin {
     }
 
     private void startLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
-        ServerWorld world = (ServerWorld) pet.getWorld();
-        ChunkPos chunkPos = new ChunkPos(pet.getBlockPos());
-        UUID petUUID = pet.getUuid();
+        try {
+            // Null safety checks
+            if (pet == null || owner == null || pet.getWorld() == null || !(pet.getWorld() instanceof ServerWorld)) {
+                return;
+            }
 
-        // Double-check to prevent race conditions
-        if (PetChunkManager.isPetActivelyLoadingChunks(petUUID)) {
-            return; // Already loading chunks
+            ServerWorld world = (ServerWorld) pet.getWorld();
+            if (world.getChunkManager() == null) {
+                return;
+            }
+
+            ChunkPos chunkPos = new ChunkPos(pet.getBlockPos());
+            UUID petUUID = pet.getUuid();
+
+            if (petUUID == null) {
+                return;
+            }
+
+            // Double-check to prevent race conditions
+            if (PetChunkManager.isPetActivelyLoadingChunks(petUUID)) {
+                return; // Already loading chunks
+            }
+
+            // Simple, efficient approach - just load the pet's chunk with good radius
+            world.getChunkManager().addTicket(
+                    PetChunkTickets.PET_TICKET_TYPE,
+                    chunkPos,
+                    2  // Same level as ender pearls use
+            );
+
+            // Track locally
+            PetChunkManager.addActivePetTicket(petUUID, chunkPos);
+
+            // Add to player's persistent data
+            if (owner instanceof ChunkLoadingPetTracker tracker) {
+                tracker.followersLoadChunks$addChunkLoadingPet(pet);
+            }
+        } catch (Exception e) {
+            System.out.println("[FollowersLoadChunks] Error starting chunk loading for pet: " + e.getMessage());
         }
-
-        // Check if this player has too many pets loading chunks
-        Map<UUID, ChunkPos> activePetTickets = PetChunkManager.getActivePetTickets();
-        long playerPetCount = activePetTickets.entrySet().stream()
-                .filter(entry -> {
-                    Entity entity = world.getEntity(entry.getKey());
-                    return entity instanceof TameableEntity tameable &&
-                            tameable.getOwner() != null &&
-                            tameable.getOwner().getUuid().equals(owner.getUuid());
-                })
-                .count();
-
-        if (playerPetCount >= 10) {
-            owner.sendMessage(Text.of("§cWarning: You have " + playerPetCount + " pets loading chunks across the world. Consider gathering them to reduce server load."), false);
-        }
-
-        // Simple, efficient approach - just load the pet's chunk with good radius
-        world.getChunkManager().addTicket(
-                PetChunkTickets.PET_TICKET_TYPE,
-                chunkPos,
-                2  // Same level as ender pearls use
-        );
-
-        // Track locally
-        PetChunkManager.addActivePetTicket(petUUID, chunkPos);
-
-        // Add to player's persistent data
-        ((ChunkLoadingPetTracker) owner).followersLoadChunks$addChunkLoadingPet(pet);
     }
 
     private void stopLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
-        UUID petUUID = pet.getUuid();
-        ChunkPos chunkPos = PetChunkManager.removeActivePetTicket(petUUID);
+        try {
+            // Null safety checks
+            if (pet == null || owner == null) {
+                return;
+            }
 
-        if (chunkPos != null) {
-            ServerWorld world = (ServerWorld) pet.getWorld();
-            world.getChunkManager().removeTicket(
-                    PetChunkTickets.PET_TICKET_TYPE,
-                    chunkPos,
-                    2
-            );
+            UUID petUUID = pet.getUuid();
+            if (petUUID == null) {
+                return;
+            }
 
-            // Remove from player's persistent data
-            ((ChunkLoadingPetTracker) owner).followersLoadChunks$removeChunkLoadingPet(pet);
+            ChunkPos chunkPos = PetChunkManager.removeActivePetTicket(petUUID);
+
+            if (chunkPos != null && pet.getWorld() instanceof ServerWorld world) {
+                if (world.getChunkManager() != null) {
+                    world.getChunkManager().removeTicket(
+                            PetChunkTickets.PET_TICKET_TYPE,
+                            chunkPos,
+                            2
+                    );
+                }
+
+                // Remove from player's persistent data
+                if (owner instanceof ChunkLoadingPetTracker tracker) {
+                    tracker.followersLoadChunks$removeChunkLoadingPet(pet);
+                }
+            }
+
+            // Clean up state tracking
+            PetChunkManager.removeSittingStateTracking(petUUID);
+        } catch (Exception e) {
+            System.out.println("[FollowersLoadChunks] Error stopping chunk loading: " + e.getMessage());
         }
-
-        // Clean up state tracking
-        PetChunkManager.removeSittingStateTracking(petUUID);
     }
 
     private void updateChunkLocation(TameableEntity pet, ServerPlayerEntity owner, ChunkPos oldChunk, ChunkPos newChunk) {
