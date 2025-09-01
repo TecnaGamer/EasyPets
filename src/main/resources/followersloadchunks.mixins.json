@@ -6,7 +6,8 @@
   "mixins": [
     "PlayerManagerMixin",
     "ServerPlayerEntityMixin",
-    "TameableEntityMixin"
+    "TameableEntityMixin",
+    "TameableEntityOverrides"
   ],
   "server": [
   ],

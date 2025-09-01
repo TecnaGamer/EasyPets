@@ -20,6 +20,7 @@ import net.minecraft.world.storage.StorageKey;
 import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
 import org.tecna.followersloadchunks.PetChunkManager;
 import org.tecna.followersloadchunks.PetChunkTickets;
+import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -38,6 +39,9 @@ public class PetRecoveryCommand {
             "minecraft:horse", "minecraft:donkey", "minecraft:mule",
             "minecraft:llama", "minecraft:trader_llama"
     );
+
+    // Spam protection - track players currently running scans
+    private static final Set<UUID> playersCurrentlyScanning = new HashSet<>();
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -216,6 +220,16 @@ public class PetRecoveryCommand {
             return 0;
         }
 
+        // Check for spam protection
+        UUID playerUUID = player.getUuid();
+        synchronized (playersCurrentlyScanning) {
+            if (playersCurrentlyScanning.contains(playerUUID)) {
+                source.sendError(Text.of("§cYou are already running a pet scan. Please wait for it to complete."));
+                return 0;
+            }
+            playersCurrentlyScanning.add(playerUUID);
+        }
+
         // Start async recovery process
         runPetRecoveryForPlayer(player, false);
         return 1;
@@ -232,6 +246,16 @@ public class PetRecoveryCommand {
         if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
             source.sendError(Text.of("This command can only be run by players"));
             return 0;
+        }
+
+        // Check for spam protection
+        UUID playerUUID = player.getUuid();
+        synchronized (playersCurrentlyScanning) {
+            if (playersCurrentlyScanning.contains(playerUUID)) {
+                source.sendError(Text.of("§cYou are already running a pet scan. Please wait for it to complete."));
+                return 0;
+            }
+            playersCurrentlyScanning.add(playerUUID);
         }
 
         // Start async location process
@@ -512,7 +536,41 @@ public class PetRecoveryCommand {
 
     private static void recoverPlayerPets(ServerPlayerEntity player, boolean locateOnly) {
         CompletableFuture.runAsync(() -> {
+            UUID playerUUID = player.getUuid();
             try {
+                FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+
+                // Trigger world save if configured
+                if ((locateOnly && config.shouldTriggerSaveOnPetLocator()) || (!locateOnly && config.shouldTriggerSaveOnRecovery())) {
+                    player.sendMessage(Text.of("§7[FollowersLoadChunks] Saving world to ensure accurate pet data..."));
+
+                    // Use CompletableFuture to properly wait for save completion
+                    CompletableFuture<Void> saveFuture = CompletableFuture.runAsync(() -> {
+                        try {
+                            player.getServer().saveAll(false, false, true);
+                            if (config.isDebugLoggingEnabled()) {
+                                System.out.println("[FollowersLoadChunks] World save completed before " + (locateOnly ? "pet location scan" : "recovery"));
+                            }
+                        } catch (Exception e) {
+                            if (config.isDebugLoggingEnabled()) {
+                                System.out.println("[FollowersLoadChunks] Error during world save: " + e.getMessage());
+                            }
+                        }
+                    });
+
+                    // Wait for save to actually complete
+                    try {
+                        saveFuture.get(); // Block until save is done
+                        Thread.sleep(1000); // Additional small delay for file system sync
+                        player.sendMessage(Text.of("§a[FollowersLoadChunks] World save completed"));
+                    } catch (Exception e) {
+                        player.sendMessage(Text.of("§c[FollowersLoadChunks] Warning: Save may not have completed properly"));
+                        if (config.isDebugLoggingEnabled()) {
+                            System.out.println("[FollowersLoadChunks] Save wait error: " + e.getMessage());
+                        }
+                    }
+                }
+
                 if (locateOnly) {
                     player.sendMessage(Text.of("§e⚠ Pet locations shown are from the last world save and may not reflect current positions"));
                     player.sendMessage(Text.of("§aScanning for your pet locations..."));
@@ -524,6 +582,7 @@ public class PetRecoveryCommand {
                 List<PetInfo> sittingPets = new ArrayList<>();
                 List<PetInfo> roamingPets = new ArrayList<>();
                 List<PetInfo> independentPets = new ArrayList<>(); // New category for IndyPets
+                Set<UUID> foundPetUUIDs = new HashSet<>(); // Track found pets to prevent duplicates
                 int totalFiles = 0;
                 int totalChunks = 0;
 
@@ -538,7 +597,7 @@ public class PetRecoveryCommand {
                     String worldName = world.getRegistryKey().getValue().toString();
                     processedWorlds.add(worldName);
 
-                    int[] counts = scanWorldForPets(player, world, standingPets, sittingPets, roamingPets, independentPets, processedFiles, totalRegionFiles);
+                    int[] counts = scanWorldForPets(player, world, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs, processedFiles, totalRegionFiles);
                     totalFiles += counts[0];
                     totalChunks += counts[1];
                     processedFiles += counts[0];
@@ -546,7 +605,7 @@ public class PetRecoveryCommand {
 
                 // Also scan any additional dimension folders that might exist
                 Path worldPath = player.getServer().getSavePath(WorldSavePath.ROOT).normalize();
-                int[] additionalCounts = scanAdditionalDimensions(player, worldPath, standingPets, sittingPets, roamingPets, independentPets);
+                int[] additionalCounts = scanAdditionalDimensions(player, worldPath, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs);
                 totalFiles += additionalCounts[0];
                 totalChunks += additionalCounts[1];
 
@@ -571,7 +630,18 @@ public class PetRecoveryCommand {
             } catch (Exception e) {
                 player.sendMessage(Text.of(" "), true); // Clear action bar
                 player.sendMessage(Text.of("§cError during pet scan: " + e.getMessage()));
-                e.printStackTrace();
+                FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+                if (config.isDebugLoggingEnabled()) {
+                    e.printStackTrace();
+                }
+            } finally {
+                // Always remove player from scanning set when done (whether successful or error)
+                synchronized (playersCurrentlyScanning) {
+                    playersCurrentlyScanning.remove(playerUUID);
+                }
+                if (FollowersLoadChunksConfig.getInstance().isDebugLoggingEnabled()) {
+                    System.out.println("[FollowersLoadChunks] Removed player " + player.getGameProfile().getName() + " from scanning set");
+                }
             }
         });
     }
@@ -825,7 +895,7 @@ public class PetRecoveryCommand {
     }
 
     private static int[] scanWorldForPets(ServerPlayerEntity player, ServerWorld world,
-                                          List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets,
+                                          List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets, Set<UUID> foundPetUUIDs,
                                           int processedFiles, int totalFiles) {
         int filesScanned = 0;
         int chunksScanned = 0;
@@ -851,7 +921,7 @@ public class PetRecoveryCommand {
                     for (Path regionPath : regionFiles) {
                         try {
                             updateProgressBar(player, processedFiles + filesScanned, totalFiles);
-                            int chunks = scanRegionFileForPets(regionPath, player.getUuid(), world, standingPets, sittingPets, roamingPets, independentPets);
+                            int chunks = scanRegionFileForPets(regionPath, player.getUuid(), world, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs);
                             filesScanned++;
                             chunksScanned += chunks;
                         } catch (Exception e) {
@@ -901,7 +971,7 @@ public class PetRecoveryCommand {
     }
 
     private static int[] scanAdditionalDimensions(ServerPlayerEntity player, Path worldPath,
-                                                  List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets) {
+                                                  List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets, Set<UUID> foundPetUUIDs) {
         int filesScanned = 0;
         int chunksScanned = 0;
 
@@ -998,7 +1068,7 @@ public class PetRecoveryCommand {
     }
 
     private static int scanRegionFileForPets(Path regionPath, UUID playerUUID, ServerWorld world,
-                                             List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets) throws IOException {
+                                             List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets, Set<UUID> foundPetUUIDs) throws IOException {
         String fileName = regionPath.getFileName().toString();
         String[] parts = fileName.replace(".mca", "").split("\\.");
         if (parts.length != 3) return 0;
@@ -1024,7 +1094,7 @@ public class PetRecoveryCommand {
                                     // Read and parse chunk NBT data
                                     NbtCompound chunkNbt = NbtIo.readCompound(inputStream, NbtSizeTracker.ofUnlimitedBytes());
                                     if (chunkNbt != null) {
-                                        parseChunkForPets(chunkNbt, playerUUID, world, chunkPos, standingPets, sittingPets, roamingPets, independentPets);
+                                        parseChunkForPets(chunkNbt, playerUUID, world, chunkPos, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs);
                                     }
                                 }
                             } catch (Exception e) {
@@ -1042,7 +1112,7 @@ public class PetRecoveryCommand {
     }
 
     private static void parseChunkForPets(NbtCompound chunkNbt, UUID playerUUID, ServerWorld world,
-                                          ChunkPos chunkPos, List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets) {
+                                          ChunkPos chunkPos, List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets, Set<UUID> foundPetUUIDs) {
         if (!chunkNbt.contains("Entities")) return;
 
         Optional<NbtList> entitiesOpt = chunkNbt.getList("Entities");
@@ -1059,7 +1129,8 @@ public class PetRecoveryCommand {
             // Check if this is a direct tameable entity owned by our player
             if (isTameablePetOwnedByPlayer(entity, playerUUID)) {
                 PetInfo petInfo = createPetInfoFromNBT(entity, chunkPos, world);
-                if (petInfo != null) {
+                if (petInfo != null && !foundPetUUIDs.contains(petInfo.uuid)) {
+                    foundPetUUIDs.add(petInfo.uuid);
                     categorizePet(petInfo, standingPets, sittingPets, roamingPets, independentPets);
                 }
             }
@@ -1078,7 +1149,8 @@ public class PetRecoveryCommand {
                             // Check if this passenger is a tameable pet owned by our player
                             if (isTameablePetOwnedByPlayer(passenger, playerUUID)) {
                                 PetInfo petInfo = createPetInfoFromNBT(passenger, chunkPos, world);
-                                if (petInfo != null) {
+                                if (petInfo != null && !foundPetUUIDs.contains(petInfo.uuid)) {
+                                    foundPetUUIDs.add(petInfo.uuid);
                                     // Mark this pet as being in a vehicle
                                     PetInfo vehiclePetInfo = new PetInfo(
                                             petInfo.uuid, petInfo.type, petInfo.customName,
@@ -1257,15 +1329,20 @@ public class PetRecoveryCommand {
     }
 
     private static void scheduleChunkCleanup(ServerWorld world, ChunkPos chunkPos, int delayTicks) {
+        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+
         world.getServer().execute(() -> {
             new Thread(() -> {
                 try {
-                    Thread.sleep(delayTicks * 50L); // Convert ticks to milliseconds
+                    // Use configured delay, but respect the provided delayTicks for recovery operations
+                    int actualDelay = Math.max(delayTicks, config.getChunkUnloadDelayTicks());
+                    Thread.sleep(actualDelay * 50L); // Convert ticks to milliseconds
+
                     world.getServer().execute(() -> {
                         world.getChunkManager().removeTicket(
                                 PetChunkTickets.PET_TICKET_TYPE,
                                 chunkPos,
-                                3
+                                config.getMaxChunkLoadingDistance()
                         );
                     });
                 } catch (InterruptedException e) {

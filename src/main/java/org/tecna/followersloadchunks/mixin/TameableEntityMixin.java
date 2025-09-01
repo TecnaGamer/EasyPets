@@ -4,10 +4,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.passive.TameableEntity;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.storage.WriteView;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,6 +16,7 @@ import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
 import org.tecna.followersloadchunks.PetChunkManager;
 import org.tecna.followersloadchunks.PetChunkTickets;
 import org.tecna.followersloadchunks.IndyPetsHelper;
+import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
 
 import java.util.UUID;
 
@@ -30,6 +29,12 @@ public class TameableEntityMixin {
 
         // Only process if this is a tameable entity AND we're on the server side
         if (entity instanceof TameableEntity pet && !pet.getWorld().isClient) {
+            // Skip all chunk loading logic if disabled in config
+            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            if (!config.isChunkLoadingEnabled()) {
+                return;
+            }
+
             // Add synchronization to prevent concurrent modification with async ticking mods
             synchronized (this) {
                 try {
@@ -108,12 +113,14 @@ public class TameableEntityMixin {
                                         world.getChunkManager().removeTicket(
                                                 PetChunkTickets.PET_TICKET_TYPE,
                                                 chunkPos,
-                                                2
+                                                config.getMaxChunkLoadingDistance()
                                         );
                                     }
                                 } catch (Exception e) {
                                     // Ignore errors during cleanup to prevent crashes
-                                    System.out.println("[FollowersLoadChunks] Error during cleanup: " + e.getMessage());
+                                    if (config.isDebugLoggingEnabled()) {
+                                        System.out.println("[FollowersLoadChunks] Error during cleanup: " + e.getMessage());
+                                    }
                                 }
                             }
                             PetChunkManager.removeSittingStateTracking(petUUID);
@@ -121,7 +128,10 @@ public class TameableEntityMixin {
                     }
                 } catch (Exception e) {
                     // Catch any unexpected errors to prevent crashes during server startup
-                    System.out.println("[FollowersLoadChunks] Error in pet tick processing: " + e.getMessage());
+                    FollowersLoadChunksConfig debugConfig = FollowersLoadChunksConfig.getInstance();
+                    if (debugConfig.isDebugLoggingEnabled()) {
+                        System.out.println("[FollowersLoadChunks] Error in pet tick processing: " + e.getMessage());
+                    }
                 }
             }
         }
@@ -167,6 +177,8 @@ public class TameableEntityMixin {
 
     private void startLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
         try {
+            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+
             // Null safety checks
             if (pet == null || owner == null || pet.getWorld() == null || !(pet.getWorld() instanceof ServerWorld)) {
                 return;
@@ -189,11 +201,11 @@ public class TameableEntityMixin {
                 return; // Already loading chunks
             }
 
-            // Simple, efficient approach - just load the pet's chunk with good radius
+            // Load the pet's chunk with configured radius
             world.getChunkManager().addTicket(
                     PetChunkTickets.PET_TICKET_TYPE,
                     chunkPos,
-                    2  // Same level as ender pearls use
+                    config.getMaxChunkLoadingDistance()
             );
 
             // Track locally
@@ -203,13 +215,22 @@ public class TameableEntityMixin {
             if (owner instanceof ChunkLoadingPetTracker tracker) {
                 tracker.followersLoadChunks$addChunkLoadingPet(pet);
             }
+
+            if (config.isDebugLoggingEnabled()) {
+                System.out.println("[FollowersLoadChunks] Started chunk loading for pet " + petUUID + " at " + chunkPos);
+            }
         } catch (Exception e) {
-            System.out.println("[FollowersLoadChunks] Error starting chunk loading for pet: " + e.getMessage());
+            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            if (config.isDebugLoggingEnabled()) {
+                System.out.println("[FollowersLoadChunks] Error starting chunk loading for pet: " + e.getMessage());
+            }
         }
     }
 
     private void stopLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
         try {
+            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+
             // Null safety checks
             if (pet == null || owner == null) {
                 return;
@@ -227,7 +248,7 @@ public class TameableEntityMixin {
                     world.getChunkManager().removeTicket(
                             PetChunkTickets.PET_TICKET_TYPE,
                             chunkPos,
-                            2
+                            config.getMaxChunkLoadingDistance()
                     );
                 }
 
@@ -239,12 +260,20 @@ public class TameableEntityMixin {
 
             // Clean up state tracking
             PetChunkManager.removeSittingStateTracking(petUUID);
+
+            if (config.isDebugLoggingEnabled()) {
+                System.out.println("[FollowersLoadChunks] Stopped chunk loading for pet " + petUUID + " at " + chunkPos);
+            }
         } catch (Exception e) {
-            System.out.println("[FollowersLoadChunks] Error stopping chunk loading: " + e.getMessage());
+            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            if (config.isDebugLoggingEnabled()) {
+                System.out.println("[FollowersLoadChunks] Error stopping chunk loading: " + e.getMessage());
+            }
         }
     }
 
     private void updateChunkLocation(TameableEntity pet, ServerPlayerEntity owner, ChunkPos oldChunk, ChunkPos newChunk) {
+        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
         ServerWorld world = (ServerWorld) pet.getWorld();
         UUID petUUID = pet.getUuid();
 
@@ -255,8 +284,11 @@ public class TameableEntityMixin {
 
         // Calculate distance to determine if this is fast travel
         double distance = Math.sqrt(Math.pow(newChunk.x - oldChunk.x, 2) + Math.pow(newChunk.z - oldChunk.z, 2));
-        int radius = distance > 5 ? 4 : 2; // Use larger radius for fast movement
-        int overlap = distance > 10 ? 100 : 20; // Longer overlap for very fast movement
+
+        // Use config values for fast movement detection
+        boolean isFastMovement = config.isFastMovementDetectionEnabled() && distance > config.getFastMovementThreshold();
+        int radius = isFastMovement ? Math.max(4, config.getMaxChunkLoadingDistance()) : config.getMaxChunkLoadingDistance();
+        int overlap = isFastMovement ? config.getFastMovementOverlapTicks() : config.getChunkUnloadDelayTicks() / 60; // Shorter overlap for normal movement
 
         // Add new chunk ticket FIRST with enhanced radius for safety
         world.getChunkManager().addTicket(
@@ -277,7 +309,7 @@ public class TameableEntityMixin {
                         world.getChunkManager().removeTicket(
                                 PetChunkTickets.PET_TICKET_TYPE,
                                 oldChunk,
-                                2 // Remove with original radius
+                                config.getMaxChunkLoadingDistance() // Remove with configured radius
                         );
                     });
                 } catch (InterruptedException e) {
@@ -285,5 +317,9 @@ public class TameableEntityMixin {
                 }
             }).start();
         });
+
+        if (config.isDebugLoggingEnabled()) {
+            System.out.println("[FollowersLoadChunks] Updated chunk location for pet " + petUUID + " from " + oldChunk + " to " + newChunk + " (distance: " + distance + ", fast: " + isFastMovement + ")");
+        }
     }
 }
