@@ -1,9 +1,6 @@
 package org.tecna.followersloadchunks.config;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.BoolArgumentType;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -109,6 +106,92 @@ public class ConfigCommand {
                 "Prevents chunk gaps during rapid movement",
                 "Increase if fast-moving pets experience chunk gaps"
         ));
+
+        // Advanced Pathfinding Settings
+        SETTING_INFO.put("advancedpathfinding", new SettingInfo(
+                "advancedpathfinding", "boolean", "true",
+                "Enable advanced intelligent pathfinding for pets",
+                "Makes pets smarter about dangerous terrain and navigation",
+                "Disable if you prefer vanilla pathfinding behavior"
+        ));
+
+        SETTING_INFO.put("navigationmultiplier", new SettingInfo(
+                "navigationmultiplier", "1.0-10.0", "2.5",
+                "Multiplier for pet navigation range based on teleport distance",
+                "Higher values let pets search further before teleporting",
+                "Increase if pets teleport too often, decrease for performance"
+        ));
+
+        SETTING_INFO.put("maxnavigationrange", new SettingInfo(
+                "maxnavigationrange", "32-1000", "320",
+                "Maximum navigation range in blocks",
+                "Prevents excessive pathfinding that could cause lag",
+                "Only increase if pets need to navigate very large structures"
+        ));
+
+        SETTING_INFO.put("minnavigationrange", new SettingInfo(
+                "minnavigationrange", "16-500", "32",
+                "Minimum navigation range in blocks",
+                "Ensures pets can do basic pathfinding even with low teleport distance",
+                "Rarely needs adjustment"
+        ));
+
+        SETTING_INFO.put("biomeaware", new SettingInfo(
+                "biomeaware", "boolean", "true",
+                "Enable biome-aware pathfinding (e.g., swimming in ocean biomes)",
+                "Pets adapt their pathfinding to current biome conditions",
+                "Disable if pets behave unexpectedly in certain biomes"
+        ));
+
+        SETTING_INFO.put("owneractivity", new SettingInfo(
+                "owneractivity", "boolean", "true",
+                "Detect owner activity to adjust pet pathfinding patience",
+                "Pets are more patient when owner is building/AFK",
+                "Disable if pets don't follow properly during activities"
+        ));
+
+        SETTING_INFO.put("terrainanalysis", new SettingInfo(
+                "terrainanalysis", "boolean", "true",
+                "Analyze terrain between pet and owner for better pathfinding",
+                "Helps pets make smarter decisions about routes",
+                "Disable if causing performance issues on large servers"
+        ));
+
+        SETTING_INFO.put("pathfindingtimeout", new SettingInfo(
+                "pathfindingtimeout", "200-6000 ticks", "1200",
+                "How long pets try pathfinding before encouraging teleport",
+                "Lower values make pets teleport sooner when stuck",
+                "Increase if pets give up on pathfinding too quickly"
+        ));
+
+        // Safety Settings
+        SETTING_INFO.put("pathfindingsafety", new SettingInfo(
+                "pathfindingsafety", "boolean", "true",
+                "Enable pathfinding safety features",
+                "Prevents pets from following owners into extreme danger",
+                "Only disable if you want pets to follow into any danger"
+        ));
+
+        SETTING_INFO.put("alwaysavoidlava", new SettingInfo(
+                "alwaysavoidlava", "boolean", "true",
+                "Pets never pathfind through lava even if owner is in it",
+                "Critical safety feature to prevent pet deaths",
+                "Only disable if you specifically want pets to follow into lava"
+        ));
+
+        SETTING_INFO.put("alwaysavoidfire", new SettingInfo(
+                "alwaysavoidfire", "boolean", "true",
+                "Pets avoid fire damage even if owner is in fire",
+                "Prevents pets from taking unnecessary fire damage",
+                "Disable if you want pets to follow through fire"
+        ));
+
+        SETTING_INFO.put("prioritizebreathing", new SettingInfo(
+                "prioritizebreathing", "boolean", "true",
+                "Pets prioritize getting air when drowning",
+                "Helps prevent pets from drowning while following",
+                "Disable if pets avoid water too aggressively"
+        ));
     }
 
     public static void register() {
@@ -147,26 +230,16 @@ public class ConfigCommand {
                                                     builder.suggest("2"); // Default
                                                     builder.suggest("3");
                                                     builder.suggest("4");
-                                                } else if (settingName.equals("chunkdelay")) {
-                                                    builder.suggest("600");  // 30 seconds
-                                                    builder.suggest("1200"); // Default (60 seconds)
-                                                    builder.suggest("2400"); // 2 minutes
-                                                    builder.suggest("6000"); // 5 minutes
-                                                } else if (settingName.equals("validationinterval")) {
-                                                    builder.suggest("1200"); // 1 minute
-                                                    builder.suggest("3600"); // 3 minutes
-                                                    builder.suggest("6000"); // Default (5 minutes)
-                                                    builder.suggest("12000"); // 10 minutes
-                                                } else if (settingName.equals("fastmovementthreshold")) {
-                                                    builder.suggest("3.0");  // More sensitive
-                                                    builder.suggest("5.0");  // Default
-                                                    builder.suggest("10.0"); // Less sensitive
-                                                    builder.suggest("15.0"); // Much less sensitive
-                                                } else if (settingName.equals("fastmovementoverlap")) {
-                                                    builder.suggest("60");  // 3 seconds
-                                                    builder.suggest("100"); // Default (5 seconds)
-                                                    builder.suggest("200"); // 10 seconds
-                                                    builder.suggest("400"); // 20 seconds
+                                                } else if (settingName.equals("navigationmultiplier")) {
+                                                    builder.suggest("1.5");  // Conservative
+                                                    builder.suggest("2.0");  // Balanced
+                                                    builder.suggest("2.5");  // Default
+                                                    builder.suggest("3.0");  // Aggressive
+                                                } else if (settingName.equals("maxnavigationrange")) {
+                                                    builder.suggest("160");  // Lower
+                                                    builder.suggest("320");  // Default
+                                                    builder.suggest("480");  // Higher
+                                                    builder.suggest("640");  // Very high
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -215,6 +288,30 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§f  fastmovement: §" + (config.isFastMovementDetectionEnabled() ? "aEnabled" : "cDisabled")));
         source.sendMessage(Text.of("§f  fastmovementthreshold: §b" + config.getFastMovementThreshold() + " chunks"));
         source.sendMessage(Text.of("§f  fastmovementoverlap: §b" + config.getFastMovementOverlapTicks() + " ticks"));
+        source.sendMessage(Text.of(""));
+
+        // Advanced Pathfinding
+        source.sendMessage(Text.of("§6Advanced Pathfinding:"));
+        source.sendMessage(Text.of("§f  advancedpathfinding: §" + (config.isAdvancedPathfindingEnabled() ? "aEnabled" : "cDisabled")));
+        if (config.isAdvancedPathfindingEnabled()) {
+            source.sendMessage(Text.of("§f    navigationmultiplier: §b" + config.getNavigationRangeMultiplier()));
+            source.sendMessage(Text.of("§f    maxnavigationrange: §b" + config.getMaxNavigationRange() + " blocks"));
+            source.sendMessage(Text.of("§f    minnavigationrange: §b" + config.getMinNavigationRange() + " blocks"));
+            source.sendMessage(Text.of("§f    biomeaware: §" + (config.isBiomeAwarePathfindingEnabled() ? "aEnabled" : "cDisabled")));
+            source.sendMessage(Text.of("§f    owneractivity: §" + (config.isOwnerActivityDetectionEnabled() ? "aEnabled" : "cDisabled")));
+            source.sendMessage(Text.of("§f    terrainanalysis: §" + (config.isTerrainAnalysisEnabled() ? "aEnabled" : "cDisabled")));
+            source.sendMessage(Text.of("§f    pathfindingtimeout: §b" + config.getPathfindingTimeoutTicks() + " ticks"));
+        }
+        source.sendMessage(Text.of(""));
+
+        // Safety Settings
+        source.sendMessage(Text.of("§6Safety Settings:"));
+        source.sendMessage(Text.of("§f  pathfindingsafety: §" + (config.isPathfindingSafetyEnabled() ? "aEnabled" : "cDisabled")));
+        if (config.isPathfindingSafetyEnabled()) {
+            source.sendMessage(Text.of("§f    alwaysavoidlava: §" + (config.shouldAlwaysAvoidLava() ? "aEnabled" : "cDisabled")));
+            source.sendMessage(Text.of("§f    alwaysavoidfire: §" + (config.shouldAlwaysAvoidFire() ? "aEnabled" : "cDisabled")));
+            source.sendMessage(Text.of("§f    prioritizebreathing: §" + (config.shouldPrioritizeAirBreathing() ? "aEnabled" : "cDisabled")));
+        }
 
         return 1;
     }
@@ -334,6 +431,20 @@ public class ConfigCommand {
             case "fastmovement" -> String.valueOf(config.isFastMovementDetectionEnabled());
             case "fastmovementthreshold" -> String.valueOf(config.getFastMovementThreshold());
             case "fastmovementoverlap" -> String.valueOf(config.getFastMovementOverlapTicks());
+            // Advanced pathfinding settings
+            case "advancedpathfinding" -> String.valueOf(config.isAdvancedPathfindingEnabled());
+            case "navigationmultiplier" -> String.valueOf(config.getNavigationRangeMultiplier());
+            case "maxnavigationrange" -> String.valueOf(config.getMaxNavigationRange());
+            case "minnavigationrange" -> String.valueOf(config.getMinNavigationRange());
+            case "biomeaware" -> String.valueOf(config.isBiomeAwarePathfindingEnabled());
+            case "owneractivity" -> String.valueOf(config.isOwnerActivityDetectionEnabled());
+            case "terrainanalysis" -> String.valueOf(config.isTerrainAnalysisEnabled());
+            case "pathfindingtimeout" -> String.valueOf(config.getPathfindingTimeoutTicks());
+            // Safety settings
+            case "pathfindingsafety" -> String.valueOf(config.isPathfindingSafetyEnabled());
+            case "alwaysavoidlava" -> String.valueOf(config.shouldAlwaysAvoidLava());
+            case "alwaysavoidfire" -> String.valueOf(config.shouldAlwaysAvoidFire());
+            case "prioritizebreathing" -> String.valueOf(config.shouldPrioritizeAirBreathing());
             default -> "unknown";
         };
     }
@@ -407,6 +518,68 @@ public class ConfigCommand {
                         return true;
                     }
                 }
+                // Advanced pathfinding settings
+                case "advancedpathfinding" -> {
+                    config.enableAdvancedPathfinding = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "navigationmultiplier" -> {
+                    double d = Double.parseDouble(value);
+                    if (d >= 1.0 && d <= 10.0) {
+                        config.navigationRangeMultiplier = d;
+                        return true;
+                    }
+                }
+                case "maxnavigationrange" -> {
+                    int i = Integer.parseInt(value);
+                    if (i >= 32 && i <= 3200) {
+                        config.maxNavigationRange = i;
+                        return true;
+                    }
+                }
+                case "minnavigationrange" -> {
+                    int i = Integer.parseInt(value);
+                    if (i >= 16 && i <= 500) {
+                        config.minNavigationRange = i;
+                        return true;
+                    }
+                }
+                case "biomeaware" -> {
+                    config.enableBiomeAwarePathfinding = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "owneractivity" -> {
+                    config.enableOwnerActivityDetection = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "terrainanalysis" -> {
+                    config.enableTerrainAnalysis = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "pathfindingtimeout" -> {
+                    int i = Integer.parseInt(value);
+                    if (i >= 200 && i <= 6000) {
+                        config.pathfindingTimeoutTicks = i;
+                        return true;
+                    }
+                }
+                // Safety settings
+                case "pathfindingsafety" -> {
+                    config.enablePathfindingSafety = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "alwaysavoidlava" -> {
+                    config.alwaysAvoidLava = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "alwaysavoidfire" -> {
+                    config.alwaysAvoidFire = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "prioritizebreathing" -> {
+                    config.prioritizeAirBreathing = Boolean.parseBoolean(value);
+                    return true;
+                }
             }
         } catch (NumberFormatException e) {
             // Invalid number format
@@ -440,9 +613,36 @@ public class ConfigCommand {
                     source.sendMessage(Text.of("§7Note: High delays will use more server memory"));
                 }
             }
+            case "advancedpathfinding" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§7Note: Pets will use basic pathfinding and may get stuck more often"));
+                }
+            }
+            case "maxnavigationrange" -> {
+                int range = Integer.parseInt(value);
+                if (range > 500) {
+                    source.sendMessage(Text.of("§7Warning: Very high navigation ranges may cause server lag"));
+                }
+            }
+            case "pathfindingsafety" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§6Warning: Disabling safety may cause pets to follow owners into lava/fire!"));
+                }
+            }
+            case "alwaysavoidlava" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§c§lWARNING: Pets may now follow owners into lava and die!"));
+                }
+            }
+            case "alwaysavoidfire" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§c§lWARNING: Pets may now follow owners into fire and take damage!"));
+                }
+            }
         }
     }
 
+    // Helper class for storing setting information
     private static class SettingInfo {
         final String name;
         final String validRange;

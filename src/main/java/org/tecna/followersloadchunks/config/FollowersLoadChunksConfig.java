@@ -32,6 +32,24 @@ public class FollowersLoadChunksConfig {
     public double fastMovementThreshold = 5.0; // Chunks moved before considering it "fast movement"
     public int fastMovementOverlapTicks = 100; // Overlap time for fast-moving pets
 
+    // Advanced Pathfinding Options
+    public boolean enableAdvancedPathfinding = true; // Master switch for all advanced pathfinding
+    public double navigationRangeMultiplier = 2.5; // Multiplier for navigation range based on teleport distance
+    public int maxNavigationRange = 320; // Maximum navigation range in blocks
+    public int minNavigationRange = 32; // Minimum navigation range in blocks
+
+    // Pathfinding Intelligence Settings
+    public boolean enableBiomeAwarePathfinding = true; // Different behavior in different biomes
+    public boolean enableOwnerActivityDetection = true; // Adjust behavior based on owner activity
+    public boolean enableTerrainAnalysis = true; // Look ahead for better path decisions
+    public int pathfindingTimeoutTicks = 1200; // How long to try pathfinding before encouraging teleport (60 seconds)
+
+    // Safety Settings - These ensure pets never follow owners into extreme danger
+    public boolean enablePathfindingSafety = true; // Master safety switch
+    public boolean alwaysAvoidLava = true; // Never path through lava even if owner is in it
+    public boolean alwaysAvoidFire = true; // Never path through fire even if owner is in it
+    public boolean prioritizeAirBreathing = true; // Encourage getting out of water when drowning
+
     private FollowersLoadChunksConfig() {}
 
     public static FollowersLoadChunksConfig getInstance() {
@@ -88,6 +106,19 @@ public class FollowersLoadChunksConfig {
 
         if (fastMovementOverlapTicks < 20) fastMovementOverlapTicks = 20; // Minimum 1 second
         if (fastMovementOverlapTicks > 600) fastMovementOverlapTicks = 600; // Maximum 30 seconds
+
+        // Validate new pathfinding settings
+        if (navigationRangeMultiplier < 1.0) navigationRangeMultiplier = 1.0;
+        if (navigationRangeMultiplier > 10.0) navigationRangeMultiplier = 10.0;
+
+        if (maxNavigationRange < 32) maxNavigationRange = 32;
+        if (maxNavigationRange > 1000) maxNavigationRange = 1000; // Prevent excessive values
+
+        if (minNavigationRange < 16) minNavigationRange = 16;
+        if (minNavigationRange > maxNavigationRange) minNavigationRange = maxNavigationRange / 2;
+
+        if (pathfindingTimeoutTicks < 200) pathfindingTimeoutTicks = 200; // Minimum 10 seconds
+        if (pathfindingTimeoutTicks > 6000) pathfindingTimeoutTicks = 6000; // Maximum 5 minutes
     }
 
     public void saveConfig() {
@@ -157,6 +188,55 @@ public class FollowersLoadChunksConfig {
         return fastMovementOverlapTicks;
     }
 
+    // New getters for advanced pathfinding
+    public boolean isAdvancedPathfindingEnabled() {
+        return enableAdvancedPathfinding;
+    }
+
+    public double getNavigationRangeMultiplier() {
+        return navigationRangeMultiplier;
+    }
+
+    public int getMaxNavigationRange() {
+        return maxNavigationRange;
+    }
+
+    public int getMinNavigationRange() {
+        return minNavigationRange;
+    }
+
+    public boolean isBiomeAwarePathfindingEnabled() {
+        return enableAdvancedPathfinding && enableBiomeAwarePathfinding;
+    }
+
+    public boolean isOwnerActivityDetectionEnabled() {
+        return enableAdvancedPathfinding && enableOwnerActivityDetection;
+    }
+
+    public boolean isTerrainAnalysisEnabled() {
+        return enableAdvancedPathfinding && enableTerrainAnalysis;
+    }
+
+    public int getPathfindingTimeoutTicks() {
+        return pathfindingTimeoutTicks;
+    }
+
+    public boolean isPathfindingSafetyEnabled() {
+        return enablePathfindingSafety;
+    }
+
+    public boolean shouldAlwaysAvoidLava() {
+        return enablePathfindingSafety && alwaysAvoidLava;
+    }
+
+    public boolean shouldAlwaysAvoidFire() {
+        return enablePathfindingSafety && alwaysAvoidFire;
+    }
+
+    public boolean shouldPrioritizeAirBreathing() {
+        return enablePathfindingSafety && prioritizeAirBreathing;
+    }
+
     // Method to get squared distance for performance
     public double getPetTeleportDistanceSquared() {
         // Convert chunks to blocks (1 chunk = 16 blocks) and square it
@@ -178,5 +258,24 @@ public class FollowersLoadChunksConfig {
         System.out.println("  Fast Movement Detection: " + enableFastMovementDetection);
         System.out.println("  Fast Movement Threshold: " + fastMovementThreshold + " chunks");
         System.out.println("  Fast Movement Overlap: " + fastMovementOverlapTicks + " ticks");
+
+        // Advanced pathfinding settings
+        System.out.println("  Advanced Pathfinding: " + enableAdvancedPathfinding);
+        if (enableAdvancedPathfinding) {
+            System.out.println("    Navigation Range Multiplier: " + navigationRangeMultiplier);
+            System.out.println("    Max Navigation Range: " + maxNavigationRange + " blocks");
+            System.out.println("    Min Navigation Range: " + minNavigationRange + " blocks");
+            System.out.println("    Biome Aware Pathfinding: " + enableBiomeAwarePathfinding);
+            System.out.println("    Owner Activity Detection: " + enableOwnerActivityDetection);
+            System.out.println("    Terrain Analysis: " + enableTerrainAnalysis);
+            System.out.println("    Pathfinding Timeout: " + pathfindingTimeoutTicks + " ticks");
+        }
+
+        System.out.println("  Pathfinding Safety: " + enablePathfindingSafety);
+        if (enablePathfindingSafety) {
+            System.out.println("    Always Avoid Lava: " + alwaysAvoidLava);
+            System.out.println("    Always Avoid Fire: " + alwaysAvoidFire);
+            System.out.println("    Prioritize Air Breathing: " + prioritizeAirBreathing);
+        }
     }
 }
