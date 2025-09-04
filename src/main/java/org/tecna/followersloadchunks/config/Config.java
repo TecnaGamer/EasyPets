@@ -9,9 +9,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class FollowersLoadChunksConfig {
+public class Config {
     private static final String CONFIG_FILE_NAME = "followersloadchunks.json";
-    private static FollowersLoadChunksConfig INSTANCE;
+    private static Config INSTANCE;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Configuration options with default values
@@ -50,22 +50,22 @@ public class FollowersLoadChunksConfig {
     public boolean alwaysAvoidFire = true; // Never path through fire even if owner is in it
     public boolean prioritizeAirBreathing = true; // Encourage getting out of water when drowning
 
-    private FollowersLoadChunksConfig() {}
+    private Config() {}
 
-    public static FollowersLoadChunksConfig getInstance() {
+    public static Config getInstance() {
         if (INSTANCE == null) {
             INSTANCE = loadConfig();
         }
         return INSTANCE;
     }
 
-    private static FollowersLoadChunksConfig loadConfig() {
+    private static Config loadConfig() {
         Path configPath = FabricLoader.getInstance().getConfigDir().resolve(CONFIG_FILE_NAME);
 
         if (Files.exists(configPath)) {
             try {
                 String json = Files.readString(configPath);
-                FollowersLoadChunksConfig config = GSON.fromJson(json, FollowersLoadChunksConfig.class);
+                Config config = GSON.fromJson(json, Config.class);
                 if (config != null) {
                     // Validate config values
                     config.validateAndFixValues();
@@ -81,7 +81,7 @@ public class FollowersLoadChunksConfig {
         }
 
         // Create new config with defaults
-        FollowersLoadChunksConfig defaultConfig = new FollowersLoadChunksConfig();
+        Config defaultConfig = new Config();
         defaultConfig.saveConfig();
         System.out.println("[FollowersLoadChunks] Created new config file: " + CONFIG_FILE_NAME);
         return defaultConfig;

@@ -1,6 +1,5 @@
 package org.tecna.followersloadchunks.config;
 
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -253,7 +252,7 @@ public class ConfigCommand {
 
     private static int executeShowAll(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
 
         source.sendMessage(Text.of("§e=== FollowersLoadChunks Configuration ==="));
         source.sendMessage(Text.of(""));
@@ -327,7 +326,7 @@ public class ConfigCommand {
             return 0;
         }
 
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
         String currentValue = getCurrentValue(config, settingName);
 
         source.sendMessage(Text.of("§e=== " + info.name + " ==="));
@@ -363,7 +362,7 @@ public class ConfigCommand {
             return 0;
         }
 
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
 
         try {
             boolean success = setSetting(config, settingName, value);
@@ -395,7 +394,7 @@ public class ConfigCommand {
             return 0;
         }
 
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
 
         boolean success = setSetting(config, settingName, info.defaultValue);
         if (success) {
@@ -411,13 +410,13 @@ public class ConfigCommand {
     private static int executeReload(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
-        FollowersLoadChunksConfig.getInstance().reloadConfig();
+        Config.getInstance().reloadConfig();
         source.sendMessage(Text.of("§a[FollowersLoadChunks] Configuration reloaded successfully"));
 
         return 1;
     }
 
-    private static String getCurrentValue(FollowersLoadChunksConfig config, String settingName) {
+    private static String getCurrentValue(Config config, String settingName) {
         return switch (settingName) {
             case "chunkloading" -> String.valueOf(config.isChunkLoadingEnabled());
             case "teleportdistance" -> String.valueOf(config.getPetTeleportDistance());
@@ -449,7 +448,7 @@ public class ConfigCommand {
         };
     }
 
-    private static boolean setSetting(FollowersLoadChunksConfig config, String settingName, String value) {
+    private static boolean setSetting(Config config, String settingName, String value) {
         try {
             switch (settingName) {
                 case "chunkloading" -> {

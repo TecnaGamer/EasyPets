@@ -5,7 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
+import org.tecna.followersloadchunks.config.Config;
 
 @Mixin(TameableEntity.class)
 public class TameableEntityOverrides {
@@ -15,7 +15,7 @@ public class TameableEntityOverrides {
         TameableEntity pet = (TameableEntity) (Object) this;
 
         if (pet.getOwner() != null) {
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
             double configuredDistance = config.getPetTeleportDistanceSquared();
 
             // Use configured distance instead of vanilla hardcoded 144.0 (12^2)

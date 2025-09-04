@@ -3,7 +3,7 @@ package org.tecna.followersloadchunks;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import org.tecna.followersloadchunks.config.ConfigCommand;
-import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
+import org.tecna.followersloadchunks.config.Config;
 
 public class Followersloadchunks implements ModInitializer {
 
@@ -12,7 +12,7 @@ public class Followersloadchunks implements ModInitializer {
     @Override
     public void onInitialize() {
         // Initialize configuration first
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
 
         PetChunkTickets.initialize();
         PetRecoveryCommand.register();
@@ -25,7 +25,7 @@ public class Followersloadchunks implements ModInitializer {
 
         // Register periodic validation if enabled
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            FollowersLoadChunksConfig currentConfig = FollowersLoadChunksConfig.getInstance();
+            Config currentConfig = Config.getInstance();
 
             if (currentConfig.isPeriodicValidationEnabled()) {
                 tickCounter++;

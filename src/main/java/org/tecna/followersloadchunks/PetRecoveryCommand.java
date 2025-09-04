@@ -4,7 +4,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.entity.passive.TameableEntity;
@@ -17,17 +16,11 @@ import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
 import net.minecraft.world.storage.StorageKey;
-import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
-import org.tecna.followersloadchunks.PetChunkManager;
-import org.tecna.followersloadchunks.PetChunkTickets;
-import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
+import org.tecna.followersloadchunks.config.Config;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.groupingBy;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -538,7 +531,7 @@ public class PetRecoveryCommand {
         CompletableFuture.runAsync(() -> {
             UUID playerUUID = player.getUuid();
             try {
-                FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+                Config config = Config.getInstance();
 
                 // Trigger world save if configured
                 if ((locateOnly && config.shouldTriggerSaveOnPetLocator()) || (!locateOnly && config.shouldTriggerSaveOnRecovery())) {
@@ -630,7 +623,7 @@ public class PetRecoveryCommand {
             } catch (Exception e) {
                 player.sendMessage(Text.of(" "), true); // Clear action bar
                 player.sendMessage(Text.of("§cError during pet scan: " + e.getMessage()));
-                FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+                Config config = Config.getInstance();
                 if (config.isDebugLoggingEnabled()) {
                     e.printStackTrace();
                 }
@@ -639,7 +632,7 @@ public class PetRecoveryCommand {
                 synchronized (playersCurrentlyScanning) {
                     playersCurrentlyScanning.remove(playerUUID);
                 }
-                if (FollowersLoadChunksConfig.getInstance().isDebugLoggingEnabled()) {
+                if (Config.getInstance().isDebugLoggingEnabled()) {
                     System.out.println("[FollowersLoadChunks] Removed player " + player.getGameProfile().getName() + " from scanning set");
                 }
             }
@@ -1329,7 +1322,7 @@ public class PetRecoveryCommand {
     }
 
     private static void scheduleChunkCleanup(ServerWorld world, ChunkPos chunkPos, int delayTicks) {
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
 
         world.getServer().execute(() -> {
             new Thread(() -> {

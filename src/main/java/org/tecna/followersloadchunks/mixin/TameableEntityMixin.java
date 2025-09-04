@@ -1,12 +1,10 @@
 package org.tecna.followersloadchunks.mixin;
 
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.passive.TameableEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 import net.minecraft.util.math.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,7 +14,7 @@ import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
 import org.tecna.followersloadchunks.PetChunkManager;
 import org.tecna.followersloadchunks.PetChunkTickets;
 import org.tecna.followersloadchunks.IndyPetsHelper;
-import org.tecna.followersloadchunks.config.FollowersLoadChunksConfig;
+import org.tecna.followersloadchunks.config.Config;
 
 import java.util.UUID;
 
@@ -30,7 +28,7 @@ public class TameableEntityMixin {
         // Only process if this is a tameable entity AND we're on the server side
         if (entity instanceof TameableEntity pet && !pet.getWorld().isClient) {
             // Skip all chunk loading logic if disabled in config
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
             if (!config.isChunkLoadingEnabled()) {
                 return;
             }
@@ -128,7 +126,7 @@ public class TameableEntityMixin {
                     }
                 } catch (Exception e) {
                     // Catch any unexpected errors to prevent crashes during server startup
-                    FollowersLoadChunksConfig debugConfig = FollowersLoadChunksConfig.getInstance();
+                    Config debugConfig = Config.getInstance();
                     if (debugConfig.isDebugLoggingEnabled()) {
                         System.out.println("[FollowersLoadChunks] Error in pet tick processing: " + e.getMessage());
                     }
@@ -177,7 +175,7 @@ public class TameableEntityMixin {
 
     private void startLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
         try {
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
 
             // Null safety checks
             if (pet == null || owner == null || pet.getWorld() == null || !(pet.getWorld() instanceof ServerWorld)) {
@@ -220,7 +218,7 @@ public class TameableEntityMixin {
                 System.out.println("[FollowersLoadChunks] Started chunk loading for pet " + petUUID + " at " + chunkPos);
             }
         } catch (Exception e) {
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
             if (config.isDebugLoggingEnabled()) {
                 System.out.println("[FollowersLoadChunks] Error starting chunk loading for pet: " + e.getMessage());
             }
@@ -229,7 +227,7 @@ public class TameableEntityMixin {
 
     private void stopLoadingChunks(TameableEntity pet, ServerPlayerEntity owner) {
         try {
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
 
             // Null safety checks
             if (pet == null || owner == null) {
@@ -265,7 +263,7 @@ public class TameableEntityMixin {
                 System.out.println("[FollowersLoadChunks] Stopped chunk loading for pet " + petUUID + " at " + chunkPos);
             }
         } catch (Exception e) {
-            FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+            Config config = Config.getInstance();
             if (config.isDebugLoggingEnabled()) {
                 System.out.println("[FollowersLoadChunks] Error stopping chunk loading: " + e.getMessage());
             }
@@ -273,7 +271,7 @@ public class TameableEntityMixin {
     }
 
     private void updateChunkLocation(TameableEntity pet, ServerPlayerEntity owner, ChunkPos oldChunk, ChunkPos newChunk) {
-        FollowersLoadChunksConfig config = FollowersLoadChunksConfig.getInstance();
+        Config config = Config.getInstance();
         ServerWorld world = (ServerWorld) pet.getWorld();
         UUID petUUID = pet.getUuid();
 
