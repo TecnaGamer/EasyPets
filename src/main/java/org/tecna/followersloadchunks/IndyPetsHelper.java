@@ -65,8 +65,12 @@ public class IndyPetsHelper {
                                 method.setAccessible(true);
                                 Object result = method.invoke(pet);
                                 if (result instanceof Boolean) {
-                                    return methodName.contains("independent") ? (Boolean) result : !(Boolean) result;
-                                }
+                                    if (methodName.contains("independent")) {
+                                        return (Boolean) result;
+                                    } else if (methodName.contains("allowedtofollow")) {
+                                        return !(Boolean) result;  // not allowed to follow = independent
+                                    }
+                                    return false;                                }
                             }
                         }
                     }

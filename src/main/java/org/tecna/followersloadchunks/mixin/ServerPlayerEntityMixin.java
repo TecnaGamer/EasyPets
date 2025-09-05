@@ -1,3 +1,4 @@
+// Updated ServerPlayerEntityMixin.java - Add persistence like ender pearls
 package org.tecna.followersloadchunks.mixin;
 
 import net.minecraft.entity.passive.TameableEntity;
@@ -7,55 +8,124 @@ import net.minecraft.storage.ReadView;
 import net.minecraft.storage.WriteView;
 import net.minecraft.util.math.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tecna.followersloadchunks.ChunkLoadingPetTracker;
 import org.tecna.followersloadchunks.PetChunkTickets;
+import org.tecna.followersloadchunks.SimplePetTracker;
+import org.tecna.followersloadchunks.config.Config;
 
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 @Mixin(ServerPlayerEntity.class)
-public class ServerPlayerEntityMixin implements ChunkLoadingPetTracker {
+public class ServerPlayerEntityMixin implements SimplePetTracker {
+    // Track pets and their last known positions
+    @Unique
+    private final Map<UUID, ChunkPos> petChunkPositions = new HashMap<>();
+    @Unique
 
-    // Track chunk-loading pets (wolves, cats, parrots, etc.)
-    private final Set<UUID> chunkLoadingPets = new HashSet<>();
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void onPlayerTick(CallbackInfo ci) {
+        ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
 
-    // Current data version - increment this when changing NBT structure
-    private static final int CURRENT_DATA_VERSION = 1;
+        // Only update every 20 ticks (1 second) like ender pearls
+        if (player.age % 20 == 0) {
+            updatePetChunkTickets(player);
+        }
+    }
+
+    @Unique
+    private void updatePetChunkTickets(ServerPlayerEntity player) {
+        if (!Config.getInstance().isChunkLoadingEnabled()) {
+            return;
+        }
+
+
+        // Find all current pets that should load chunks
+        Map<UUID, ChunkPos> currentPets = new HashMap<>();
+
+        for (ServerWorld world : player.getServer().getWorlds()) {
+            // Only check pets in the same dimension as player
+            if (!world.getRegistryKey().equals(player.getWorld().getRegistryKey())) {
+                continue;
+            }
+
+            for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                if (entity instanceof TameableEntity pet &&
+                        pet.isTamed() &&
+                        pet.getOwner() == player &&
+                        !pet.isSitting() &&
+                        !pet.isLeashed() &&
+                        !isIndependent(pet)) {
+
+                    currentPets.put(pet.getUuid(), pet.getChunkPos());
+                }
+            }
+        }
+
+        // Add/renew tickets for current pets (like ender pearl system)
+        for (Map.Entry<UUID, ChunkPos> entry : currentPets.entrySet()) {
+            UUID petUUID = entry.getKey();
+            ChunkPos chunkPos = entry.getValue();
+
+            // Add ticket with short expiry (like ender pearls)
+            ((ServerWorld) player.getWorld()).getChunkManager().addTicket(
+                    PetChunkTickets.PET_TICKET_TYPE,
+                    chunkPos,
+                    Config.getInstance().getMaxChunkLoadingDistance()
+            );
+        }
+
+        // Update tracking
+        this.petChunkPositions.clear();
+        this.petChunkPositions.putAll(currentPets);
+    }
+
+    // Helper method for independence check
+    @Unique
+    private boolean isIndependent(TameableEntity pet) {
+        if (!org.tecna.followersloadchunks.IndyPetsHelper.isIndyPetsLoaded()) {
+            return false;
+        }
+        return org.tecna.followersloadchunks.IndyPetsHelper.isPetIndependent(pet);
+    }
 
     @Inject(method = "writeCustomData", at = @At("TAIL"))
     private void writePetData(WriteView view, CallbackInfo ci) {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
 
-        // Write version number first
-        view.putInt("followersloadchunks_version", CURRENT_DATA_VERSION);
-
-        if (!this.chunkLoadingPets.isEmpty()) {
+        // Save pet chunk loading data like ender pearls
+        if (!this.petChunkPositions.isEmpty()) {
             WriteView.ListView listView = view.getList("chunk_loading_pets");
 
-            for (UUID petUUID : this.chunkLoadingPets) {
-                // Find the pet to get its current data
+            for (Map.Entry<UUID, ChunkPos> entry : this.petChunkPositions.entrySet()) {
+                UUID petUUID = entry.getKey();
+                ChunkPos chunkPos = entry.getValue();
+
+                // Verify pet still exists and should be loading chunks
+                boolean shouldSave = false;
                 for (ServerWorld world : player.getServer().getWorlds()) {
                     if (world.getEntity(petUUID) instanceof TameableEntity pet) {
-                        // For 1.21.7, use the correct method names
-                        if (pet.isTamed() && pet.getOwner() == player && !pet.isInSittingPose()) {
-                            WriteView writeView = listView.add();
-                            writeView.putLong("pet_uuid_most", petUUID.getMostSignificantBits());
-                            writeView.putLong("pet_uuid_least", petUUID.getLeastSignificantBits());
-                            writeView.putString("world", pet.getWorld().getRegistryKey().getValue().toString());
-
-                            // Use getBlockPos().getChunkPos() for 1.21.7
-                            ChunkPos chunkPos = new ChunkPos(pet.getBlockPos());
-                            writeView.putInt("chunk_x", chunkPos.x);
-                            writeView.putInt("chunk_z", chunkPos.z);
-                            writeView.putString("pet_type", pet.getClass().getSimpleName());
+                        if (pet.isTamed() && pet.getOwner() == player &&
+                                !pet.isSitting() && !pet.isLeashed() && !isIndependent(pet)) {
+                            shouldSave = true;
+                            break;
                         }
-                        break;
                     }
+                }
+
+                if (shouldSave) {
+                    WriteView writeView = listView.add();
+                    writeView.putLong("pet_uuid_most", petUUID.getMostSignificantBits());
+                    writeView.putLong("pet_uuid_least", petUUID.getLeastSignificantBits());
+                    writeView.putInt("chunk_x", chunkPos.x);
+                    writeView.putInt("chunk_z", chunkPos.z);
+                    writeView.putString("world", player.getWorld().getRegistryKey().getValue().toString());
                 }
             }
         }
@@ -65,93 +135,61 @@ public class ServerPlayerEntityMixin implements ChunkLoadingPetTracker {
     private void readPetData(ReadView view, CallbackInfo ci) {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
 
-        // Check data version
-        int dataVersion = view.getInt("followersloadchunks_version", 0);
-        boolean isFirstTimeWithMod = dataVersion == 0 && view.getListReadView("chunk_loading_pets").isEmpty();
-
-        if (dataVersion != CURRENT_DATA_VERSION) {
-            // Handle migration or reset - log to server instead of sending messages
-            if (dataVersion == 0) {
-                if (isFirstTimeWithMod) {
-                    System.out.println("[FollowersLoadChunks] First time connection for player " + player.getGameProfile().getName() + " - will auto-run pet recovery");
-                    // Mark for auto-recovery instead of using instance flag
-                    org.tecna.followersloadchunks.PetChunkManager.markPlayerForAutoRecovery(player);
-                } else {
-                    System.out.println("[FollowersLoadChunks] Migrating pet data from version 0 to " + CURRENT_DATA_VERSION + " for player " + player.getGameProfile().getName());
-                }
-            } else if (dataVersion > CURRENT_DATA_VERSION) {
-                System.out.println("[FollowersLoadChunks] Warning: Player " + player.getGameProfile().getName() + " has pet data from version " + dataVersion + " (newer than supported " + CURRENT_DATA_VERSION + "), resetting data");
-                this.chunkLoadingPets.clear();
-                return;
-            } else {
-                System.out.println("[FollowersLoadChunks] Migrating pet data from version " + dataVersion + " to " + CURRENT_DATA_VERSION + " for player " + player.getGameProfile().getName());
-            }
-        }
-
         // Clear existing data
-        this.chunkLoadingPets.clear();
+        this.petChunkPositions.clear();
 
-        // Read pet data
+        // Read and restore pet chunk tickets like ender pearls
         view.getListReadView("chunk_loading_pets").forEach(petView -> {
             long uuidMost = petView.getLong("pet_uuid_most", 0L);
             long uuidLeast = petView.getLong("pet_uuid_least", 0L);
             UUID petUUID = new UUID(uuidMost, uuidLeast);
-            Optional<String> worldKey = petView.getOptionalString("world");
-            Optional<String> petType = petView.getOptionalString("pet_type");
 
-            if (worldKey.isPresent()) {
-                int chunkX = petView.getInt("chunk_x", 0);
-                int chunkZ = petView.getInt("chunk_z", 0);
-                ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
+            int chunkX = petView.getInt("chunk_x", 0);
+            int chunkZ = petView.getInt("chunk_z", 0);
+            ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
 
-                // Find the correct world
-                for (ServerWorld world : player.getServer().getWorlds()) {
-                    if (world.getRegistryKey().getValue().toString().equals(worldKey.get())) {
-                        // Verify the pet still exists before adding ticket
-                        if (world.getEntity(petUUID) instanceof TameableEntity pet) {
-                            if (pet.isTamed() && pet.getOwnerReference() != null &&
-                                    pet.getOwnerReference().getUuid().equals(player.getUuid())) {
+            String worldKey = petView.getString("world", "");
 
-                                // Add chunk ticket immediately
-                                world.getChunkManager().addTicket(
-                                        PetChunkTickets.PET_TICKET_TYPE,
-                                        chunkPos,
-                                        2
-                                );
+            // Find the correct world and immediately add ticket
+            for (ServerWorld world : player.getServer().getWorlds()) {
+                if (world.getRegistryKey().getValue().toString().equals(worldKey)) {
+                    // Immediately add chunk ticket like ender pearls do
+                    world.getChunkManager().addTicket(
+                            PetChunkTickets.PET_TICKET_TYPE,
+                            chunkPos,
+                            Config.getInstance().getMaxChunkLoadingDistance()
+                    );
 
-                                // Track this pet
-                                this.chunkLoadingPets.add(petUUID);
+                    // Track this pet
+                    this.petChunkPositions.put(petUUID, chunkPos);
 
-                                // Force pet to stand when found (delayed execution)
-                                player.getServer().execute(() -> {
-                                    if (world.getEntity(petUUID) instanceof TameableEntity standingPet) {
-                                        standingPet.setSitting(false);
-                                    }
-                                });
-                            }
-                        } else {
-                            // Pet no longer exists, don't add to tracking
-                            System.out.println("[FollowersLoadChunks] Skipping missing pet " + petUUID + " for player " + player.getGameProfile().getName());
-                        }
-                        break;
+                    if (Config.getInstance().isDebugLoggingEnabled()) {
+                        System.out.println("[FollowersLoadChunks] Restored chunk ticket for pet " + petUUID + " at " + chunkPos + " in " + worldKey);
                     }
+                    break;
                 }
             }
         });
     }
 
-    // Interface implementation methods (must be public to match interface)
-    public void followersLoadChunks$addChunkLoadingPet(TameableEntity pet) {
-        if (pet.isTamed() && !pet.isSitting()) {
-            this.chunkLoadingPets.add(pet.getUuid());
-        }
+    // Interface implementation
+    @Override
+    public void addChunkLoadingPet(UUID petUUID) {
+        // Not used in this system - player manages everything
     }
 
-    public void followersLoadChunks$removeChunkLoadingPet(TameableEntity pet) {
-        this.chunkLoadingPets.remove(pet.getUuid());
+    @Override
+    public void removeChunkLoadingPet(UUID petUUID) {
+        this.petChunkPositions.remove(petUUID);
     }
 
-    public boolean followersLoadChunks$isPetChunkLoading(UUID petUUID) {
-        return this.chunkLoadingPets.contains(petUUID);
+    @Override
+    public boolean hasChunkLoadingPet(UUID petUUID) {
+        return this.petChunkPositions.containsKey(petUUID);
+    }
+
+    @Override
+    public Set<UUID> getChunkLoadingPets() {
+        return new HashSet<>(this.petChunkPositions.keySet());
     }
 }

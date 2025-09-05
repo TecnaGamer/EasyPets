@@ -93,23 +93,9 @@ public class PetRecoveryCommand {
         int totalPlayersWithPets = 0;
 
         for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
-            if (player instanceof ChunkLoadingPetTracker tracker) {
-                // Count pets loading chunks for this player
-                int playerPetCount = 0;
-
-                // We need to iterate through loaded entities to count active pets
-                for (ServerWorld world : source.getServer().getWorlds()) {
-                    for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
-                        if (entity instanceof net.minecraft.entity.passive.TameableEntity pet) {
-                            if (pet.isTamed() && pet.getOwner() == player && !pet.isSitting()) {
-                                // Check if this pet is in the tracker
-                                if (tracker.followersLoadChunks$isPetChunkLoading(pet.getUuid())) {
-                                    playerPetCount++;
-                                }
-                            }
-                        }
-                    }
-                }
+            if (player instanceof SimplePetTracker tracker) {
+                Set<UUID> playerPets = tracker.getChunkLoadingPets();
+                int playerPetCount = playerPets.size();
 
                 if (playerPetCount > 0) {
                     totalPlayersWithPets++;
@@ -127,7 +113,7 @@ public class PetRecoveryCommand {
     private static void showDetailedPlayerStats(ServerCommandSource source, ServerPlayerEntity targetPlayer) {
         source.sendMessage(Text.of("§a=== Pet Stats for " + targetPlayer.getGameProfile().getName() + " ==="));
 
-        if (!(targetPlayer instanceof ChunkLoadingPetTracker tracker)) {
+        if (!(targetPlayer instanceof SimplePetTracker tracker)) {
             source.sendError(Text.of("Player data not available"));
             return;
         }
@@ -135,6 +121,8 @@ public class PetRecoveryCommand {
         List<PetDetails> loadingPets = new ArrayList<>();
         List<PetDetails> sittingPets = new ArrayList<>();
         List<PetDetails> independentPets = new ArrayList<>();
+
+        Set<UUID> chunkLoadingPetUUIDs = tracker.getChunkLoadingPets();
 
         // Find all pets for this player across all worlds
         for (ServerWorld world : source.getServer().getWorlds()) {
@@ -144,12 +132,10 @@ public class PetRecoveryCommand {
                         String petType = pet.getClass().getSimpleName().replace("Entity", "");
                         String worldName = world.getRegistryKey().getValue().toString().replace("minecraft:", "");
 
-                        // Get custom name if available
                         String displayName = pet.hasCustomName() ?
                                 pet.getCustomName().getString() + " (" + petType + ")" :
                                 petType;
 
-                        // Check if pet is independent (IndyPets)
                         boolean isIndependent = isIndependentPet(pet);
 
                         PetDetails details = new PetDetails(
@@ -167,7 +153,7 @@ public class PetRecoveryCommand {
                             independentPets.add(details);
                         } else if (pet.isSitting()) {
                             sittingPets.add(details);
-                        } else if (tracker.followersLoadChunks$isPetChunkLoading(pet.getUuid())) {
+                        } else if (chunkLoadingPetUUIDs.contains(pet.getUuid())) {
                             loadingPets.add(details);
                         }
                     }
@@ -175,6 +161,7 @@ public class PetRecoveryCommand {
             }
         }
 
+        // Display results same as before...
         if (!loadingPets.isEmpty()) {
             source.sendMessage(Text.of("§6Pets loading chunks (" + loadingPets.size() + "):"));
             for (PetDetails pet : loadingPets) {
@@ -204,6 +191,7 @@ public class PetRecoveryCommand {
             source.sendMessage(Text.of("§7No pets found for this player"));
         }
     }
+
 
     private static int executePetRecovery(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
@@ -290,16 +278,18 @@ public class PetRecoveryCommand {
     private static int executeDebugCleanup(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
-        int removedTickets = PetChunkManager.getActivePetTicketCount();
-
-        // Force cleanup all active pet tickets
+        int totalPets = 0;
         for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
-            PetChunkManager.cleanupPlayerPetTickets(player);
+            if (player instanceof SimplePetTracker tracker) {
+                int playerPets = tracker.getChunkLoadingPets().size();
+                totalPets += playerPets;
+                tracker.getChunkLoadingPets().clear();
+            }
         }
 
         source.sendMessage(Text.of("§e=== Forced Cleanup Complete ==="));
-        source.sendMessage(Text.of("§7Removed: §c" + removedTickets + " chunk tickets"));
-        source.sendMessage(Text.of("§7Remaining: §a" + PetChunkManager.getActivePetTicketCount() + " tickets"));
+        source.sendMessage(Text.of("§7Cleared tracking for: §c" + totalPets + " pets"));
+        source.sendMessage(Text.of("§7Tickets will auto-expire in 3 seconds"));
 
         return 1;
     }
@@ -307,45 +297,21 @@ public class PetRecoveryCommand {
     private static int executeDebugTickets(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
-        int activeTickets = PetChunkManager.getActivePetTicketCount();
-        source.sendMessage(Text.of("§e=== Active Chunk Tickets ==="));
-        source.sendMessage(Text.of("§7Total tickets: §f" + activeTickets));
-
-        if (activeTickets > 0) {
-            source.sendMessage(Text.of(""));
-
-            AtomicInteger count = new AtomicInteger(0);
-            PetChunkManager.getActivePetTickets().forEach((petUUID, chunkPos) -> {
-                count.incrementAndGet();
-                if (count.get() > 15) {
-                    if (count.get() == 16) {
-                        source.sendMessage(Text.of("§7... and " + (activeTickets - 15) + " more"));
-                    }
-                    return;
-                }
-
-                // Try to find what this ticket belongs to
-                String info = "§f" + petUUID.toString().substring(0, 8) + "... §7at §6" + chunkPos;
-
-                // Try to find the pet
-                for (ServerWorld world : source.getServer().getWorlds()) {
-                    net.minecraft.entity.Entity entity = world.getEntity(petUUID);
-                    if (entity instanceof net.minecraft.entity.passive.TameableEntity pet) {
-                        String petName = pet.hasCustomName() ? pet.getCustomName().getString() : pet.getClass().getSimpleName();
-                        String ownerName = pet.getOwner() instanceof ServerPlayerEntity owner ? owner.getGameProfile().getName() : "Unknown";
-                        String worldName = world.getRegistryKey().getValue().toString().replace("minecraft:", "");
-                        info = "§f" + petName + " §7(§6" + ownerName + "§7) in §e" + worldName;
-                        break;
-                    }
-                }
-                source.sendMessage(Text.of("  • " + info));
-            });
-        } else {
-            source.sendMessage(Text.of("§7No active tickets"));
+        int totalTracked = 0;
+        for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
+            if (player instanceof SimplePetTracker tracker) {
+                totalTracked += tracker.getChunkLoadingPets().size();
+            }
         }
+
+        source.sendMessage(Text.of("§e=== Tracked Pets ==="));
+        source.sendMessage(Text.of("§7Total tracked pets: §f" + totalTracked));
+        source.sendMessage(Text.of("§7Note: With the simplified system, we only track pet UUIDs"));
+        source.sendMessage(Text.of("§7Actual chunk tickets auto-expire and aren't centrally tracked"));
 
         return 1;
     }
+
 
     private static int executeDebugReset(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
@@ -353,29 +319,15 @@ public class PetRecoveryCommand {
         try {
             ServerPlayerEntity targetPlayer = net.minecraft.command.argument.EntityArgumentType.getPlayer(context, "playerName");
 
-            // Clean up their tickets
-            int beforeCount = PetChunkManager.getActivePetTicketCount();
-            PetChunkManager.cleanupPlayerPetTickets(targetPlayer);
-            int afterCount = PetChunkManager.getActivePetTicketCount();
-            int removedCount = beforeCount - afterCount;
-
-            // Clear their persistent data if possible
-            if (targetPlayer instanceof ChunkLoadingPetTracker tracker) {
-                // We can't directly access the private Set, but we can clear it by removing all current pets
-                for (ServerWorld world : source.getServer().getWorlds()) {
-                    for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
-                        if (entity instanceof net.minecraft.entity.passive.TameableEntity pet &&
-                                pet.getOwner() == targetPlayer) {
-                            tracker.followersLoadChunks$removeChunkLoadingPet(pet);
-                        }
-                    }
-                }
+            int petCount = 0;
+            if (targetPlayer instanceof SimplePetTracker tracker) {
+                petCount = tracker.getChunkLoadingPets().size();
+                tracker.getChunkLoadingPets().clear();
             }
 
             source.sendMessage(Text.of("§e=== Player Reset Complete ==="));
             source.sendMessage(Text.of("§7Player: §f" + targetPlayer.getGameProfile().getName()));
-            source.sendMessage(Text.of("§7Removed: §c" + removedCount + " chunk tickets"));
-            source.sendMessage(Text.of("§7Cleared: §aAll persistent pet data"));
+            source.sendMessage(Text.of("§7Cleared tracking for: §c" + petCount + " pets"));
 
             targetPlayer.sendMessage(Text.of("§7[FollowersLoadChunks] Your pet chunk loading data has been reset by an admin"));
 
@@ -390,18 +342,19 @@ public class PetRecoveryCommand {
         ServerCommandSource source = context.getSource();
 
         source.sendMessage(Text.of("§e=== FollowersLoadChunks Info ==="));
-        source.sendMessage(Text.of("§7Version: §fDevelopment Build"));
-        source.sendMessage(Text.of("§7Data Format: §fv1"));
-        source.sendMessage(Text.of("§7Active Tickets: §f" + PetChunkManager.getActivePetTicketCount()));
+        source.sendMessage(Text.of("§7Version: §fSimplified System"));
+        source.sendMessage(Text.of("§7Ticket System: §fAuto-expiring (60 ticks)"));
+        source.sendMessage(Text.of("§7Based on: §fVanilla Ender Pearl system"));
         source.sendMessage(Text.of(""));
 
         // Show online players with pet data
         source.sendMessage(Text.of("§7Online Players:"));
         int playersWithData = 0;
         for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
-            if (player instanceof ChunkLoadingPetTracker) {
+            if (player instanceof SimplePetTracker tracker) {
+                int petCount = tracker.getChunkLoadingPets().size();
                 playersWithData++;
-                source.sendMessage(Text.of("  • §f" + player.getGameProfile().getName() + " §a✓"));
+                source.sendMessage(Text.of("  • §f" + player.getGameProfile().getName() + " §7(§6" + petCount + " pets§7)"));
             }
         }
 
@@ -1327,8 +1280,9 @@ public class PetRecoveryCommand {
         world.getServer().execute(() -> {
             new Thread(() -> {
                 try {
-                    // Use configured delay, but respect the provided delayTicks for recovery operations
-                    int actualDelay = Math.max(delayTicks, config.getChunkUnloadDelayTicks());
+                    // Use a fixed delay since we removed the config option
+                    // Recovery operations use delayTicks parameter, normal operations use 1200 ticks (60 seconds)
+                    int actualDelay = Math.max(delayTicks, 1200); // Fixed 60-second default
                     Thread.sleep(actualDelay * 50L); // Convert ticks to milliseconds
 
                     world.getServer().execute(() -> {

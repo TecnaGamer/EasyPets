@@ -21,8 +21,7 @@ public class FollowOwnerGoalMixin {
     @Inject(method = "start", at = @At("HEAD"))
     public void start(CallbackInfo ci) {
 
-        navigation.setMaxFollowRange(Config.getInstance().maxNavigationRange);
-
+        navigation.setMaxFollowRange(Config.getInstance().getMaxNavigationRange());
     }
 
 
