@@ -11,7 +11,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "org.tecna.easypets.EasyPets"
+      "org.tecna.easypets.EasyPetsFabric"
     ]
   },
   "mixins": [

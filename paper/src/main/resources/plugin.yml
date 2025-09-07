@@ -1,0 +1,4 @@
+name: EasyPets
+main: org.tecna.easypets.paper.EasyPetsPaper
+version: ${version}
+api-version: '1.20'

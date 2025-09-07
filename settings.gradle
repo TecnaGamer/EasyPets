@@ -7,3 +7,6 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+include('common', 'fabric', 'neoforge', 'paper')
+rootProject.name = 'EasyPets'
