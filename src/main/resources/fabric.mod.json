@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "id": "followersloadchunks",
+  "id": "easypets",
   "version": "${version}",
-  "name": "FollowersLoadChunks",
-  "description": "",
-  "authors": [],
+  "name": "EasyPets",
+  "description": "Make your pets easier to manage with chunk loading, smart recovery, and dynamic speed adjustments",
+  "authors": ["Tecna"],
   "contact": {},
   "license": "All-Rights-Reserved",
-  "icon": "assets/followersloadchunks/icon.png",
+  "icon": "assets/easypets/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "org.tecna.followersloadchunks.Followersloadchunks"
+      "org.tecna.easypets.EasyPets"
     ]
   },
   "mixins": [
-    "followersloadchunks.mixins.json"
+    "easypets.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",

@@ -1,8 +1,7 @@
-package org.tecna.followersloadchunks;
+package org.tecna.easypets;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -16,7 +15,7 @@ import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
 import net.minecraft.world.storage.StorageKey;
-import org.tecna.followersloadchunks.config.Config;
+import org.tecna.easypets.config.Config;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -487,7 +486,7 @@ public class PetRecoveryCommand {
                 Config config = Config.getInstance();
 
                 // Trigger world save if configured
-                if ((locateOnly && config.shouldTriggerSaveOnPetLocator()) || (!locateOnly && config.shouldTriggerSaveOnRecovery())) {
+                if ((locateOnly && config.shouldSaveOnLocate()) || (!locateOnly && config.shouldSaveOnRecovery())) {
                     player.sendMessage(Text.of("§7[FollowersLoadChunks] Saving world to ensure accurate pet data..."));
 
                     // Use CompletableFuture to properly wait for save completion
@@ -1289,7 +1288,7 @@ public class PetRecoveryCommand {
                         world.getChunkManager().removeTicket(
                                 PetChunkTickets.PET_TICKET_TYPE,
                                 chunkPos,
-                                config.getMaxChunkLoadingDistance()
+                                config.getMaxChunkDistance()
                         );
                     });
                 } catch (InterruptedException e) {

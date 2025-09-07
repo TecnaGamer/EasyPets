@@ -1,4 +1,4 @@
-package org.tecna.followersloadchunks;
+package org.tecna.easypets;
 
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;

@@ -1,4 +1,4 @@
-package org.tecna.followersloadchunks;
+package org.tecna.easypets;
 
 import java.util.Set;
 import java.util.UUID;

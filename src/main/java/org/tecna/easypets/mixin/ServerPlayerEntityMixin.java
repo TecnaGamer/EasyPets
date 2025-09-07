@@ -1,5 +1,5 @@
 // Updated ServerPlayerEntityMixin.java - Add persistence like ender pearls
-package org.tecna.followersloadchunks.mixin;
+package org.tecna.easypets.mixin;
 
 import net.minecraft.entity.passive.TameableEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -12,9 +12,9 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tecna.followersloadchunks.PetChunkTickets;
-import org.tecna.followersloadchunks.SimplePetTracker;
-import org.tecna.followersloadchunks.config.Config;
+import org.tecna.easypets.PetChunkTickets;
+import org.tecna.easypets.SimplePetTracker;
+import org.tecna.easypets.config.Config;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,7 +77,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
             ((ServerWorld) player.getWorld()).getChunkManager().addTicket(
                     PetChunkTickets.PET_TICKET_TYPE,
                     chunkPos,
-                    Config.getInstance().getMaxChunkLoadingDistance()
+                    Config.getInstance().getMaxChunkDistance()
             );
         }
 
@@ -89,10 +89,10 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
     // Helper method for independence check
     @Unique
     private boolean isIndependent(TameableEntity pet) {
-        if (!org.tecna.followersloadchunks.IndyPetsHelper.isIndyPetsLoaded()) {
+        if (!org.tecna.easypets.IndyPetsHelper.isIndyPetsLoaded()) {
             return false;
         }
-        return org.tecna.followersloadchunks.IndyPetsHelper.isPetIndependent(pet);
+        return org.tecna.easypets.IndyPetsHelper.isPetIndependent(pet);
     }
 
     @Inject(method = "writeCustomData", at = @At("TAIL"))
@@ -157,7 +157,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
                     world.getChunkManager().addTicket(
                             PetChunkTickets.PET_TICKET_TYPE,
                             chunkPos,
-                            Config.getInstance().getMaxChunkLoadingDistance()
+                            Config.getInstance().getMaxChunkDistance()
                     );
 
                     // Track this pet

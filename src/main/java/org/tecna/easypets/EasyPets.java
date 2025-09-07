@@ -1,10 +1,10 @@
-package org.tecna.followersloadchunks;
+package org.tecna.easypets;
 
 import net.fabricmc.api.ModInitializer;
-import org.tecna.followersloadchunks.config.ConfigCommand;
-import org.tecna.followersloadchunks.config.Config;
+import org.tecna.easypets.config.ConfigCommand;
+import org.tecna.easypets.config.Config;
 
-public class Followersloadchunks implements ModInitializer {
+public class EasyPets implements ModInitializer {
 
     @Override
     public void onInitialize() {
@@ -14,8 +14,9 @@ public class Followersloadchunks implements ModInitializer {
         PetRecoveryCommand.register();
         ConfigCommand.register();
 
+        System.out.println("EasyPets initialized!");
+
         if (config.isDebugLoggingEnabled()) {
-            System.out.println("[FollowersLoadChunks] Mod initialized with simplified chunk loading system");
             config.printCurrentConfig();
         }
 

@@ -1,4 +1,4 @@
-package org.tecna.followersloadchunks.mixin;
+package org.tecna.easypets.mixin;
 
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.PlayerManager;
@@ -6,7 +6,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tecna.followersloadchunks.SimplePetTracker;
+import org.tecna.easypets.SimplePetTracker;
 
 @Mixin(PlayerManager.class)
 public class PlayerManagerMixin {

@@ -1,4 +1,4 @@
-package org.tecna.followersloadchunks.mixin;
+package org.tecna.easypets.mixin;
 
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.TameableEntity;
@@ -12,15 +12,15 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tecna.followersloadchunks.config.Config;
+import org.tecna.easypets.config.Config;
 
 @Mixin(LivingEntity.class)
-public class DynamicPetSpeedMixin {
+public class DynamicRunningMixin {
 
-    @Unique private static final Identifier SPEED_MODIFIER_ID = Identifier.of("followersloadchunks", "dynamic_pet_speed");
+    @Unique private static final Identifier SPEED_MODIFIER_ID = Identifier.of("easypets", "dynamic_pet_speed");
     @Unique private double lastPlayerX, lastPlayerY, lastPlayerZ;
     @Unique private double playerSpeed = 0.0;
-    @Unique private int speedCalculationTimer = 0;
+    @Unique private int speedUpdateCounter = 0;
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
@@ -35,7 +35,7 @@ public class DynamicPetSpeedMixin {
         if (owner == null) return;
 
         Config config = Config.getInstance();
-        if (!config.isDynamicPetSpeedEnabled()) {
+        if (!config.isDynamicRunningEnabled()) {
             removeSpeedModifier(tameable);
             return;
         }
@@ -50,9 +50,9 @@ public class DynamicPetSpeedMixin {
         }
 
         // Calculate player movement speed every 5 ticks
-        speedCalculationTimer++;
-        if (speedCalculationTimer >= 5) {
-            speedCalculationTimer = 0;
+        speedUpdateCounter++;
+        if (speedUpdateCounter >= 5) {
+            speedUpdateCounter = 0;
             calculatePlayerSpeed(owner);
         }
 
@@ -100,9 +100,9 @@ public class DynamicPetSpeedMixin {
 
     @Unique
     private double calculateSpeedMultiplier(double distance, double playerSpeed, Config config) {
-        double targetDistance = config.getPetSpeedMinDistance(); // Default 6.0
-        double maxMultiplier = config.getMaxPetSpeedMultiplier(); // Default 2.5
-        double speedThreshold = config.getPlayerSpeedThreshold(); // Default 0.1
+        double targetDistance = config.getRunningTargetDistance(); // Default 4.0
+        double maxMultiplier = config.getMaxRunningMultiplier(); // Default 1.8
+        double speedThreshold = config.getPlayerMovementThreshold(); // Default 0.1
 
         // Far away pets always run fast
         if (distance > targetDistance * 2) {
