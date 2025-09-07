@@ -23,14 +23,19 @@ public class Config {
 
     // Dynamic Pet Running Settings
     public boolean enableDynamicRunning = true;
-    public double runningTargetDistance = 6.0; // Distance where pets start running faster
-    public double runningMaxDistance = -1.0; // -1 means use teleportDistance
+    public double runningTargetDistance = 4.0; // Distance where pets start running faster
     public double maxRunningMultiplier = 1.5; // Maximum running speed boost
     public double playerMovementThreshold = 0.1; // Minimum player movement to trigger speed changes
 
+    // Natural Regeneration Settings
+    public boolean enableNaturalRegen = true;
+    public int regenDelayTicks = 300; // 15 seconds (300 ticks) after damage before regen starts
+    public float regenAmountPerSecond = 0.05f; // 0.05 health points per second
+    public float regenMaxHealthPercent = 1.0f; // Regenerate to 100% health
+
     // Save options
-    public boolean saveOnLocate = false;
-    public boolean saveOnRecovery = false;
+    public boolean saveOnLocate = true;
+    public boolean saveOnRecovery = true;
 
     private Config() {}
 
@@ -81,22 +86,22 @@ public class Config {
         if (runningTargetDistance < 1.0) runningTargetDistance = 1.0;
         if (runningTargetDistance > 50.0) runningTargetDistance = 50.0;
 
-        // If runningMaxDistance is -1, use teleportDistance, otherwise validate
-        if (runningMaxDistance <= 0) {
-            runningMaxDistance = teleportDistance;
-        } else {
-            if (runningMaxDistance > 100.0) runningMaxDistance = 100.0;
-            if (runningMaxDistance <= runningTargetDistance) {
-                runningMaxDistance = runningTargetDistance + 2.0;
-            }
-        }
-
 
         if (maxRunningMultiplier < 1.0) maxRunningMultiplier = 1.0;
         if (maxRunningMultiplier > 10.0) maxRunningMultiplier = 10.0;
 
         if (playerMovementThreshold < 0.01) playerMovementThreshold = 0.01;
         if (playerMovementThreshold > 1.0) playerMovementThreshold = 1.0;
+
+        // Natural Regeneration validation
+        if (regenDelayTicks < 20) regenDelayTicks = 20; // Minimum 1 second
+        if (regenDelayTicks > 6000) regenDelayTicks = 6000; // Maximum 5 minutes
+
+        if (regenAmountPerSecond < 0.01f) regenAmountPerSecond = 0.01f;
+        if (regenAmountPerSecond > 5.0f) regenAmountPerSecond = 5.0f;
+
+        if (regenMaxHealthPercent < 0.1f) regenMaxHealthPercent = 0.1f;
+        if (regenMaxHealthPercent > 1.0f) regenMaxHealthPercent = 1.0f;
     }
 
     public void saveConfig() {
@@ -117,6 +122,51 @@ public class Config {
         INSTANCE = loadConfig();
     }
 
+    // Method to get default values for ConfigCommand
+    public static String getDefaultValueFor(String settingName) {
+        Config defaultConfig = new Config(); // This works since we're inside the Config class
+        return switch (settingName) {
+            case "enableChunkLoading" -> String.valueOf(defaultConfig.enableChunkLoading);
+            case "teleportDistance" -> String.valueOf(defaultConfig.teleportDistance);
+            case "maxChunkDistance" -> String.valueOf(defaultConfig.maxChunkDistance);
+            case "navigationScanningRange" -> String.valueOf(defaultConfig.navigationScanningRange);
+            case "enableDynamicRunning" -> String.valueOf(defaultConfig.enableDynamicRunning);
+            case "runningTargetDistance" -> String.valueOf(defaultConfig.runningTargetDistance);
+            case "maxRunningMultiplier" -> String.valueOf(defaultConfig.maxRunningMultiplier);
+            case "playerMovementThreshold" -> String.valueOf(defaultConfig.playerMovementThreshold);
+            case "enableNaturalRegen" -> String.valueOf(defaultConfig.enableNaturalRegen);
+            case "regenDelayTicks" -> String.valueOf(defaultConfig.regenDelayTicks);
+            case "regenAmountPerSecond" -> String.valueOf(defaultConfig.regenAmountPerSecond);
+            case "regenMaxHealthPercent" -> String.valueOf(defaultConfig.regenMaxHealthPercent);
+            case "saveOnLocate" -> String.valueOf(defaultConfig.saveOnLocate);
+            case "saveOnRecovery" -> String.valueOf(defaultConfig.saveOnRecovery);
+            case "enableDebugLogging" -> String.valueOf(defaultConfig.enableDebugLogging);
+            default -> "unknown";
+        };
+    }
+
+    // Method to reset all settings to defaults
+    public void resetToDefaults() {
+        Config defaultConfig = new Config(); // This works since we're inside the Config class
+
+        // Copy all default values to current config
+        this.enableChunkLoading = defaultConfig.enableChunkLoading;
+        this.teleportDistance = defaultConfig.teleportDistance;
+        this.maxChunkDistance = defaultConfig.maxChunkDistance;
+        this.navigationScanningRange = defaultConfig.navigationScanningRange;
+        this.enableDynamicRunning = defaultConfig.enableDynamicRunning;
+        this.runningTargetDistance = defaultConfig.runningTargetDistance;
+        this.maxRunningMultiplier = defaultConfig.maxRunningMultiplier;
+        this.playerMovementThreshold = defaultConfig.playerMovementThreshold;
+        this.enableNaturalRegen = defaultConfig.enableNaturalRegen;
+        this.regenDelayTicks = defaultConfig.regenDelayTicks;
+        this.regenAmountPerSecond = defaultConfig.regenAmountPerSecond;
+        this.regenMaxHealthPercent = defaultConfig.regenMaxHealthPercent;
+        this.saveOnLocate = defaultConfig.saveOnLocate;
+        this.saveOnRecovery = defaultConfig.saveOnRecovery;
+        this.enableDebugLogging = defaultConfig.enableDebugLogging;
+    }
+
     // Essential getters only
     public boolean isChunkLoadingEnabled() { return enableChunkLoading; }
     public double getTeleportDistance() { return teleportDistance; }
@@ -129,12 +179,14 @@ public class Config {
     // Dynamic Pet Running getters
     public boolean isDynamicRunningEnabled() { return enableDynamicRunning; }
     public double getRunningTargetDistance() { return runningTargetDistance; }
-    public double getRunningMaxDistance() {
-        // Always return the actual teleport distance if set to -1
-        return runningMaxDistance <= 0 ? teleportDistance : runningMaxDistance;
-    }
     public double getMaxRunningMultiplier() { return maxRunningMultiplier; }
     public double getPlayerMovementThreshold() { return playerMovementThreshold; }
+
+    // Natural Regeneration getters
+    public boolean isNaturalRegenEnabled() { return enableNaturalRegen; }
+    public int getRegenDelayTicks() { return regenDelayTicks; }
+    public float getRegenAmountPerSecond() { return regenAmountPerSecond; }
+    public float getRegenMaxHealthPercent() { return regenMaxHealthPercent; }
 
     // Keep this for the teleport distance calculation
     public double getTeleportDistanceSquared() {
@@ -157,6 +209,13 @@ public class Config {
             System.out.println("    Running Target Distance: " + runningTargetDistance + " blocks");
             System.out.println("    Max Running Multiplier: " + maxRunningMultiplier + "x");
             System.out.println("    Player Movement Threshold: " + playerMovementThreshold + " blocks/tick");
+        }
+        System.out.println("  ");
+        System.out.println("  Natural Regeneration: " + enableNaturalRegen);
+        if (enableNaturalRegen) {
+            System.out.println("    Regen Delay: " + (regenDelayTicks / 20.0) + " seconds");
+            System.out.println("    Regen Rate: " + regenAmountPerSecond + " health/second");
+            System.out.println("    Max Health %: " + (regenMaxHealthPercent * 100) + "%");
         }
         System.out.println("  System: Player-based (like ender pearls)");
     }

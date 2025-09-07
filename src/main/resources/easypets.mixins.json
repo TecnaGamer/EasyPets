@@ -6,6 +6,7 @@
   "mixins": [
     "DynamicRunningMixin",
     "FollowOwnerGoalMixin",
+    "PetNaturalRegenMixin",
     "PlayerManagerMixin",
     "ServerPlayerEntityMixin",
     "TameableEntityMixin",

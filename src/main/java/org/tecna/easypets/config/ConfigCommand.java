@@ -14,34 +14,34 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public class ConfigCommand {
 
-    // Complete setting information for all config options with improved names
+    // Complete setting information for all config options
     private static final Map<String, SettingInfo> SETTING_INFO = new HashMap<>();
 
     static {
         // Core settings
         SETTING_INFO.put("enableChunkLoading", new SettingInfo(
-                "enableChunkLoading", "boolean", "true",
+                "enableChunkLoading", "boolean",
                 "Enable/disable the entire chunk loading system",
                 "Set to false to use only /petlocate without chunk loading",
                 "Server owners who want pets to locate but not load chunks"
         ));
 
         SETTING_INFO.put("teleportDistance", new SettingInfo(
-                "teleportDistance", "1.0-100.0", "12.0",
+                "teleportDistance", "1.0-100.0",
                 "Distance in blocks before pets try to teleport to owner",
                 "Vanilla default is 12 blocks. Lower = pets stay closer",
                 "Adjust based on your server's playstyle preferences"
         ));
 
         SETTING_INFO.put("maxChunkDistance", new SettingInfo(
-                "maxChunkDistance", "1-10", "2",
+                "maxChunkDistance", "1-10",
                 "Radius of chunks to keep loaded around each pet",
                 "Higher values increase server load but provide more stability",
                 "Only increase if pets are having chunk loading issues"
         ));
 
         SETTING_INFO.put("navigationScanningRange", new SettingInfo(
-                "navigationScanningRange", "32-1000", "320",
+                "navigationScanningRange", "32-1000",
                 "Maximum navigation range in blocks for pet pathfinding",
                 "Higher values let pets search further before teleporting",
                 "Increase if pets teleport too often, decrease for performance"
@@ -49,50 +49,73 @@ public class ConfigCommand {
 
         // Dynamic Pet Running settings
         SETTING_INFO.put("enableDynamicRunning", new SettingInfo(
-                "enableDynamicRunning", "boolean", "true",
+                "enableDynamicRunning", "boolean",
                 "Enable/disable dynamic pet running adjustment system",
                 "Pets will run faster when you're moving fast and they're far away",
                 "Disable if you prefer vanilla pet following behavior"
         ));
 
         SETTING_INFO.put("runningTargetDistance", new SettingInfo(
-                "runningTargetDistance", "1.0-50.0", "6.0",
+                "runningTargetDistance", "1.0-50.0",
                 "Distance in blocks where pets start running faster",
                 "Pets closer than this distance use normal speed",
                 "Lower values = pets run faster more often, higher = only when far"
         ));
 
-        SETTING_INFO.put("runningMaxDistance", new SettingInfo(
-                "runningMaxDistance", "-1 or 1.0-100.0", "-1",
-                "Maximum distance for running boosts (-1 = use teleport distance)",
-                "-1 automatically uses your teleport distance, or set a custom value",
-                "Should be larger than target distance, -1 recommended for consistency"
-        ));
 
         SETTING_INFO.put("maxRunningMultiplier", new SettingInfo(
-                "maxRunningMultiplier", "1.0-10.0", "2.5",
+                "maxRunningMultiplier", "1.0-10.0",
                 "Maximum running speed multiplier when catching up",
-                "2.5 = up to 150% faster when far behind and you're sprinting",
-                "Higher values help pets keep up but may look unnatural"
+                "Higher values help pets keep up but may look unnatural",
+                "Adjust based on desired pet movement balance"
         ));
 
         SETTING_INFO.put("playerMovementThreshold", new SettingInfo(
-                "playerMovementThreshold", "0.01-1.0", "0.1",
+                "playerMovementThreshold", "0.01-1.0",
                 "Minimum player movement to trigger pet speed changes",
                 "Very low value - prevents speed changes from tiny movements",
                 "Technical setting, rarely needs adjustment"
         ));
 
+        // Natural Regeneration settings
+        SETTING_INFO.put("enableNaturalRegen", new SettingInfo(
+                "enableNaturalRegen", "boolean",
+                "Enable/disable natural health regeneration for pets",
+                "Pets will slowly regenerate health when not taking damage",
+                "Enable for easier pet management, disable for vanilla behavior"
+        ));
+
+        SETTING_INFO.put("regenDelayTicks", new SettingInfo(
+                "regenDelayTicks", "20-6000",
+                "Delay in ticks before regeneration starts after taking damage",
+                "Higher values = longer wait after damage for balance",
+                "Increase if regen feels too overpowered, decrease for faster healing"
+        ));
+
+        SETTING_INFO.put("regenAmountPerSecond", new SettingInfo(
+                "regenAmountPerSecond", "0.01-5.0",
+                "Amount of health regenerated per second",
+                "Default is similar to horse regeneration speed",
+                "Adjust based on desired healing speed and game balance"
+        ));
+
+        SETTING_INFO.put("regenMaxHealthPercent", new SettingInfo(
+                "regenMaxHealthPercent", "0.1-1.0",
+                "Maximum health percentage to regenerate to",
+                "1.0 = 100% health, 0.8 = 80% health. Prevents full healing if desired",
+                "Set to less than 1.0 if you want pets to need some manual healing"
+        ));
+
         // Save options
         SETTING_INFO.put("saveOnLocate", new SettingInfo(
-                "saveOnLocate", "boolean", "false",
+                "saveOnLocate", "boolean",
                 "Trigger world save when /petlocate is used",
                 "Ensures most accurate pet locations but makes command slower",
                 "Enable if pet locations are frequently inaccurate"
         ));
 
         SETTING_INFO.put("saveOnRecovery", new SettingInfo(
-                "saveOnRecovery", "boolean", "false",
+                "saveOnRecovery", "boolean",
                 "Trigger world save before /petrecovery runs",
                 "Improves recovery success rate but makes command slower",
                 "Enable if pet recovery often fails to find pets"
@@ -100,7 +123,7 @@ public class ConfigCommand {
 
         // Debug option
         SETTING_INFO.put("enableDebugLogging", new SettingInfo(
-                "enableDebugLogging", "boolean", "false",
+                "enableDebugLogging", "boolean",
                 "Enable detailed console logging for troubleshooting",
                 "Only enable when investigating issues - creates log spam",
                 "Disable after troubleshooting to reduce server logs"
@@ -114,10 +137,21 @@ public class ConfigCommand {
                     .executes(ConfigCommand::executeShowAll) // Default: show all settings
                     .then(literal("reload")
                             .executes(ConfigCommand::executeReload))
+                    .then(literal("reset")
+                            .then(literal("all")
+                                    .executes(ConfigCommand::executeResetAll))
+                            .executes(context -> {
+                                // Show usage when just typing /petconfig reset
+                                context.getSource().sendMessage(Text.of("§7Usage: §f/petconfig reset all §7or §f/petconfig <setting> reset"));
+                                return 1;
+                            }))
                     .then(argument("setting", StringArgumentType.string())
                             .suggests((context, builder) -> {
-                                // Auto-complete ALL setting names
-                                SETTING_INFO.keySet().forEach(builder::suggest);
+                                // Auto-complete setting names that start with what the user typed
+                                String partialInput = builder.getRemaining().toLowerCase();
+                                SETTING_INFO.keySet().stream()
+                                        .filter(setting -> setting.toLowerCase().startsWith(partialInput))
+                                        .forEach(builder::suggest);
                                 return builder.buildFuture();
                             })
                             .executes(ConfigCommand::executeShowSetting) // Show specific setting
@@ -152,14 +186,24 @@ public class ConfigCommand {
                                                     builder.suggest("4.0");  // Closer
                                                     builder.suggest("6.0");  // Default
                                                     builder.suggest("8.0");  // Further
-                                                } else if (settingName.equals("runningMaxDistance")) {
-                                                    builder.suggest("-1");   // Use teleport distance
-                                                    builder.suggest("12.0"); // Custom
-                                                    builder.suggest("16.0"); // Custom further
                                                 } else if (settingName.equals("maxRunningMultiplier")) {
                                                     builder.suggest("1.5");  // Conservative
                                                     builder.suggest("2.5");  // Default
                                                     builder.suggest("3.0");  // Fast
+                                                } else if (settingName.equals("regenDelayTicks")) {
+                                                    builder.suggest("300");   // 15 seconds
+                                                    builder.suggest("600");   // 30 seconds (default)
+                                                    builder.suggest("1200");  // 1 minute
+                                                    builder.suggest("2400");  // 2 minutes
+                                                } else if (settingName.equals("regenAmountPerSecond")) {
+                                                    builder.suggest("0.01");   // Very slow
+                                                    builder.suggest("0.025");  // Default (horse-like)
+                                                    builder.suggest("0.05");   // Slow
+                                                    builder.suggest("0.1");    // Medium
+                                                } else if (settingName.equals("regenMaxHealthPercent")) {
+                                                    builder.suggest("0.5");   // 50%
+                                                    builder.suggest("0.75");  // 75%
+                                                    builder.suggest("1.0");   // 100% (default)
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -180,6 +224,7 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§7Use §f/petconfig <setting>§7 to see details about a specific setting"));
         source.sendMessage(Text.of("§7Use §f/petconfig <setting> <value>§7 to change a setting"));
         source.sendMessage(Text.of("§7Use §f/petconfig <setting> reset§7 to reset a setting"));
+        source.sendMessage(Text.of("§7Use §f/petconfig reset all§7 to reset all settings"));
         source.sendMessage(Text.of(""));
 
         // Core Features
@@ -195,10 +240,18 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§f  enableDynamicRunning: §" + (config.isDynamicRunningEnabled() ? "aEnabled" : "cDisabled")));
         if (config.isDynamicRunningEnabled()) {
             source.sendMessage(Text.of("§f  runningTargetDistance: §b" + config.getRunningTargetDistance() + " blocks"));
-            source.sendMessage(Text.of("§f  runningMaxDistance: §b" + config.getRunningMaxDistance() + " blocks" +
-                    (config.runningMaxDistance <= 0 ? " §7(using teleport distance)" : "")));
             source.sendMessage(Text.of("§f  maxRunningMultiplier: §b" + config.getMaxRunningMultiplier() + "x"));
             source.sendMessage(Text.of("§f  playerMovementThreshold: §b" + config.getPlayerMovementThreshold()));
+        }
+        source.sendMessage(Text.of(""));
+
+        // Natural Regeneration
+        source.sendMessage(Text.of("§6Natural Regeneration:"));
+        source.sendMessage(Text.of("§f  enableNaturalRegen: §" + (config.isNaturalRegenEnabled() ? "aEnabled" : "cDisabled")));
+        if (config.isNaturalRegenEnabled()) {
+            source.sendMessage(Text.of("§f  regenDelayTicks: §b" + config.getRegenDelayTicks() + " ticks §7(" + (config.getRegenDelayTicks() / 20.0) + "s)"));
+            source.sendMessage(Text.of("§f  regenAmountPerSecond: §b" + config.getRegenAmountPerSecond() + " health/sec"));
+            source.sendMessage(Text.of("§f  regenMaxHealthPercent: §b" + (config.getRegenMaxHealthPercent() * 100) + "%"));
         }
         source.sendMessage(Text.of(""));
 
@@ -235,11 +288,12 @@ public class ConfigCommand {
 
         Config config = Config.getInstance();
         String currentValue = getCurrentValue(config, settingName);
+        String defaultValue = getDefaultValue(settingName);
 
         source.sendMessage(Text.of("§e=== " + info.name + " ==="));
         source.sendMessage(Text.of(""));
         source.sendMessage(Text.of("§6Current Value: §f" + currentValue));
-        source.sendMessage(Text.of("§6Default Value: §7" + info.defaultValue));
+        source.sendMessage(Text.of("§6Default Value: §7" + defaultValue));
         source.sendMessage(Text.of("§6Valid Range: §7" + info.validRange));
         source.sendMessage(Text.of(""));
         source.sendMessage(Text.of("§6Description:"));
@@ -302,14 +356,29 @@ public class ConfigCommand {
         }
 
         Config config = Config.getInstance();
+        String defaultValue = getDefaultValue(settingName);
 
-        boolean success = setSetting(config, settingName, info.defaultValue);
+        boolean success = setSetting(config, settingName, defaultValue);
         if (success) {
             config.saveConfig();
-            source.sendMessage(Text.of("§a[EasyPets] " + info.name + " reset to default: " + info.defaultValue));
+            source.sendMessage(Text.of("§a[EasyPets] " + info.name + " reset to default: " + defaultValue));
         } else {
             source.sendError(Text.of("§cFailed to reset " + settingName));
         }
+
+        return 1;
+    }
+
+    private static int executeResetAll(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        Config config = Config.getInstance();
+
+        // Reset all settings to defaults
+        resetAllSettings(config);
+        config.saveConfig();
+
+        source.sendMessage(Text.of("§a[EasyPets] All settings have been reset to default values"));
+        source.sendMessage(Text.of("§7Use §f/petconfig§7 to view the current configuration"));
 
         return 1;
     }
@@ -323,6 +392,16 @@ public class ConfigCommand {
         return 1;
     }
 
+    // Helper method to get default value for any setting
+    private static String getDefaultValue(String settingName) {
+        return Config.getDefaultValueFor(settingName);
+    }
+
+    // Helper method to reset all settings to defaults
+    private static void resetAllSettings(Config config) {
+        config.resetToDefaults();
+    }
+
     private static String getCurrentValue(Config config, String settingName) {
         return switch (settingName) {
             case "enableChunkLoading" -> String.valueOf(config.isChunkLoadingEnabled());
@@ -331,9 +410,12 @@ public class ConfigCommand {
             case "navigationScanningRange" -> String.valueOf(config.getNavigationScanningRange());
             case "enableDynamicRunning" -> String.valueOf(config.isDynamicRunningEnabled());
             case "runningTargetDistance" -> String.valueOf(config.getRunningTargetDistance());
-            case "runningMaxDistance" -> String.valueOf(config.runningMaxDistance);
             case "maxRunningMultiplier" -> String.valueOf(config.getMaxRunningMultiplier());
             case "playerMovementThreshold" -> String.valueOf(config.getPlayerMovementThreshold());
+            case "enableNaturalRegen" -> String.valueOf(config.isNaturalRegenEnabled());
+            case "regenDelayTicks" -> String.valueOf(config.getRegenDelayTicks());
+            case "regenAmountPerSecond" -> String.valueOf(config.getRegenAmountPerSecond());
+            case "regenMaxHealthPercent" -> String.valueOf(config.getRegenMaxHealthPercent());
             case "saveOnLocate" -> String.valueOf(config.shouldSaveOnLocate());
             case "saveOnRecovery" -> String.valueOf(config.shouldSaveOnRecovery());
             case "enableDebugLogging" -> String.valueOf(config.isDebugLoggingEnabled());
@@ -380,13 +462,6 @@ public class ConfigCommand {
                         return true;
                     }
                 }
-                case "runningMaxDistance" -> {
-                    double d = Double.parseDouble(value);
-                    if (d == -1.0 || (d >= 1.0 && d <= 100.0)) {
-                        config.runningMaxDistance = d;
-                        return true;
-                    }
-                }
                 case "maxRunningMultiplier" -> {
                     double d = Double.parseDouble(value);
                     if (d >= 1.0 && d <= 10.0) {
@@ -398,6 +473,31 @@ public class ConfigCommand {
                     double d = Double.parseDouble(value);
                     if (d >= 0.01 && d <= 1.0) {
                         config.playerMovementThreshold = d;
+                        return true;
+                    }
+                }
+                case "enableNaturalRegen" -> {
+                    config.enableNaturalRegen = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "regenDelayTicks" -> {
+                    int i = Integer.parseInt(value);
+                    if (i >= 20 && i <= 6000) {
+                        config.regenDelayTicks = i;
+                        return true;
+                    }
+                }
+                case "regenAmountPerSecond" -> {
+                    float f = Float.parseFloat(value);
+                    if (f >= 0.01f && f <= 5.0f) {
+                        config.regenAmountPerSecond = f;
+                        return true;
+                    }
+                }
+                case "regenMaxHealthPercent" -> {
+                    float f = Float.parseFloat(value);
+                    if (f >= 0.1f && f <= 1.0f) {
+                        config.regenMaxHealthPercent = f;
                         return true;
                     }
                 }
@@ -430,6 +530,11 @@ public class ConfigCommand {
             case "enableDynamicRunning" -> {
                 if (!Boolean.parseBoolean(value)) {
                     source.sendMessage(Text.of("§7Note: Pet speeds will return to vanilla behavior"));
+                }
+            }
+            case "enableNaturalRegen" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§7Note: Pets will no longer regenerate health automatically"));
                 }
             }
             case "enableDebugLogging" -> {
@@ -471,6 +576,26 @@ public class ConfigCommand {
                     source.sendMessage(Text.of("§7Note: Very low target distances may cause frequent speed changes"));
                 }
             }
+            case "regenAmountPerSecond" -> {
+                float amount = Float.parseFloat(value);
+                if (amount > 2.0f) {
+                    source.sendMessage(Text.of("§7Warning: Very high regeneration rates may make pets overpowered"));
+                }
+            }
+            case "regenDelayTicks" -> {
+                int delay = Integer.parseInt(value);
+                if (delay < 100) {
+                    source.sendMessage(Text.of("§7Note: Very short delays may make pets regenerate too quickly after damage"));
+                } else if (delay > 1200) {
+                    source.sendMessage(Text.of("§7Note: Very long delays may make regeneration feel unresponsive"));
+                }
+            }
+            case "regenMaxHealthPercent" -> {
+                float percent = Float.parseFloat(value);
+                if (percent < 0.8f) {
+                    source.sendMessage(Text.of("§7Note: Low max health percentages mean pets will need manual healing"));
+                }
+            }
         }
     }
 
@@ -478,15 +603,13 @@ public class ConfigCommand {
     private static class SettingInfo {
         final String name;
         final String validRange;
-        final String defaultValue;
         final String description;
         final String details;
         final String whenToUse;
 
-        SettingInfo(String name, String validRange, String defaultValue, String description, String details, String whenToUse) {
+        SettingInfo(String name, String validRange, String description, String details, String whenToUse) {
             this.name = name;
             this.validRange = validRange;
-            this.defaultValue = defaultValue;
             this.description = description;
             this.details = details;
             this.whenToUse = whenToUse;
