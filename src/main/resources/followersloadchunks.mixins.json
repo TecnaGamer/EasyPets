@@ -4,6 +4,7 @@
   "package": "org.tecna.followersloadchunks.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "DynamicPetSpeedMixin",
     "FollowOwnerGoalMixin",
     "PlayerManagerMixin",
     "ServerPlayerEntityMixin",

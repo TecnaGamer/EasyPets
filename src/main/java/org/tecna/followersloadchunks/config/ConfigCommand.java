@@ -14,7 +14,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public class ConfigCommand {
 
-    // Complete setting information for all 7 config options
+    // Complete setting information for all config options including dynamic pet speed
     private static final Map<String, SettingInfo> SETTING_INFO = new HashMap<>();
 
     static {
@@ -45,6 +45,49 @@ public class ConfigCommand {
                 "Maximum navigation range in blocks for pet pathfinding",
                 "Higher values let pets search further before teleporting",
                 "Increase if pets teleport too often, decrease for performance"
+        ));
+
+        // Dynamic Pet Speed settings
+        SETTING_INFO.put("dynamicpetspeed", new SettingInfo(
+                "dynamicpetspeed", "boolean", "true",
+                "Enable/disable dynamic pet speed adjustment system",
+                "Pets will speed up when you're moving fast and they're far away",
+                "Disable if you prefer vanilla pet following behavior"
+        ));
+
+        SETTING_INFO.put("petspeedmindistance", new SettingInfo(
+                "petspeedmindistance", "1.0-50.0", "6.0",
+                "Distance in blocks where pets start speeding up",
+                "Pets closer than this distance use normal speed",
+                "Lower values = pets speed up more often, higher = only when far"
+        ));
+
+        SETTING_INFO.put("petspeedmaxdistance", new SettingInfo(
+                "petspeedmaxdistance", "-1 or 1.0-100.0", "-1",
+                "Maximum distance for speed boosts (-1 = use teleport distance)",
+                "-1 automatically uses your teleport distance, or set a custom value",
+                "Should be larger than min distance, -1 recommended for consistency"
+        ));
+
+        SETTING_INFO.put("minpetspeedmultiplier", new SettingInfo(
+                "minpetspeedmultiplier", "0.1-2.0", "0.8",
+                "Speed multiplier when player is stationary",
+                "0.8 = 20% slower when you're not moving, 1.0 = normal speed",
+                "Lower values make stationary pets move slower and feel calmer"
+        ));
+
+        SETTING_INFO.put("maxpetspeedmultiplier", new SettingInfo(
+                "maxpetspeedmultiplier", "1.0-10.0", "2.5",
+                "Maximum speed multiplier when catching up",
+                "2.5 = up to 150% faster when far behind and you're sprinting",
+                "Higher values help pets keep up but may look unnatural"
+        ));
+
+        SETTING_INFO.put("playerspeedthreshold", new SettingInfo(
+                "playerspeedthreshold", "0.01-1.0", "0.1",
+                "Minimum player movement to trigger pet speed changes",
+                "Very low value - prevents speed changes from tiny movements",
+                "Technical setting, rarely needs adjustment"
         ));
 
         // Save options
@@ -112,6 +155,22 @@ public class ConfigCommand {
                                                     builder.suggest("320");  // Default
                                                     builder.suggest("480");  // Higher
                                                     builder.suggest("640");  // Very high
+                                                } else if (settingName.equals("petspeedmindistance")) {
+                                                    builder.suggest("4.0");  // Closer
+                                                    builder.suggest("6.0");  // Default
+                                                    builder.suggest("8.0");  // Further
+                                                } else if (settingName.equals("petspeedmaxdistance")) {
+                                                    builder.suggest("-1");   // Use teleport distance
+                                                    builder.suggest("12.0"); // Custom
+                                                    builder.suggest("16.0"); // Custom further
+                                                } else if (settingName.equals("minpetspeedmultiplier")) {
+                                                    builder.suggest("0.6");  // Slower
+                                                    builder.suggest("0.8");  // Default
+                                                    builder.suggest("1.0");  // Normal
+                                                } else if (settingName.equals("maxpetspeedmultiplier")) {
+                                                    builder.suggest("1.5");  // Conservative
+                                                    builder.suggest("2.5");  // Default
+                                                    builder.suggest("3.0");  // Fast
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -140,6 +199,19 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§f  teleportdistance: §b" + config.getPetTeleportDistance() + " blocks"));
         source.sendMessage(Text.of("§f  maxchunkdistance: §b" + config.getMaxChunkLoadingDistance() + " chunks"));
         source.sendMessage(Text.of("§f  maxnavigationrange: §b" + config.getMaxNavigationRange() + " blocks"));
+        source.sendMessage(Text.of(""));
+
+        // Dynamic Pet Speed
+        source.sendMessage(Text.of("§6Dynamic Pet Speed:"));
+        source.sendMessage(Text.of("§f  dynamicpetspeed: §" + (config.isDynamicPetSpeedEnabled() ? "aEnabled" : "cDisabled")));
+        if (config.isDynamicPetSpeedEnabled()) {
+            source.sendMessage(Text.of("§f  petspeedmindistance: §b" + config.getPetSpeedMinDistance() + " blocks"));
+            source.sendMessage(Text.of("§f  petspeedmaxdistance: §b" + config.getPetSpeedMaxDistance() + " blocks" +
+                    (config.petSpeedMaxDistance <= 0 ? " §7(using teleport distance)" : "")));
+            source.sendMessage(Text.of("§f  minpetspeedmultiplier: §b" + config.getMinPetSpeedMultiplier() + "x"));
+            source.sendMessage(Text.of("§f  maxpetspeedmultiplier: §b" + config.getMaxPetSpeedMultiplier() + "x"));
+            source.sendMessage(Text.of("§f  playerspeedthreshold: §b" + config.getPlayerSpeedThreshold()));
+        }
         source.sendMessage(Text.of(""));
 
         // Save Options
@@ -269,6 +341,12 @@ public class ConfigCommand {
             case "teleportdistance" -> String.valueOf(config.getPetTeleportDistance());
             case "maxchunkdistance" -> String.valueOf(config.getMaxChunkLoadingDistance());
             case "maxnavigationrange" -> String.valueOf(config.getMaxNavigationRange());
+            case "dynamicpetspeed" -> String.valueOf(config.isDynamicPetSpeedEnabled());
+            case "petspeedmindistance" -> String.valueOf(config.getPetSpeedMinDistance());
+            case "petspeedmaxdistance" -> String.valueOf(config.petSpeedMaxDistance);
+            case "minpetspeedmultiplier" -> String.valueOf(config.getMinPetSpeedMultiplier());
+            case "maxpetspeedmultiplier" -> String.valueOf(config.getMaxPetSpeedMultiplier());
+            case "playerspeedthreshold" -> String.valueOf(config.getPlayerSpeedThreshold());
             case "saveonlocator" -> String.valueOf(config.shouldTriggerSaveOnPetLocator());
             case "saveonrecovery" -> String.valueOf(config.shouldTriggerSaveOnRecovery());
             case "debuglogging" -> String.valueOf(config.isDebugLoggingEnabled());
@@ -304,6 +382,38 @@ public class ConfigCommand {
                         return true;
                     }
                 }
+                case "dynamicpetspeed" -> {
+                    config.enableDynamicPetSpeed = Boolean.parseBoolean(value);
+                    return true;
+                }
+                case "petspeedmindistance" -> {
+                    double d = Double.parseDouble(value);
+                    if (d >= 1.0 && d <= 50.0) {
+                        config.petSpeedMinDistance = d;
+                        return true;
+                    }
+                }
+                case "minpetspeedmultiplier" -> {
+                    double d = Double.parseDouble(value);
+                    if (d >= 0.1 && d <= 2.0) {
+                        config.minPetSpeedMultiplier = d;
+                        return true;
+                    }
+                }
+                case "maxpetspeedmultiplier" -> {
+                    double d = Double.parseDouble(value);
+                    if (d >= 1.0 && d <= 10.0) {
+                        config.maxPetSpeedMultiplier = d;
+                        return true;
+                    }
+                }
+                case "playerspeedthreshold" -> {
+                    double d = Double.parseDouble(value);
+                    if (d >= 0.01 && d <= 1.0) {
+                        config.playerSpeedThreshold = d;
+                        return true;
+                    }
+                }
                 case "saveonlocator" -> {
                     config.triggerSaveOnPetLocator = Boolean.parseBoolean(value);
                     return true;
@@ -328,6 +438,11 @@ public class ConfigCommand {
             case "chunkloading" -> {
                 if (!Boolean.parseBoolean(value)) {
                     source.sendMessage(Text.of("§7Note: Existing chunk tickets will auto-expire in 5 seconds"));
+                }
+            }
+            case "dynamicpetspeed" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§7Note: Pet speeds will return to vanilla behavior"));
                 }
             }
             case "debuglogging" -> {
@@ -355,6 +470,18 @@ public class ConfigCommand {
                     source.sendMessage(Text.of("§7Note: Very low teleport distances may cause pets to teleport frequently"));
                 } else if (distance > 32.0) {
                     source.sendMessage(Text.of("§7Note: Very high teleport distances may cause pets to get lost more easily"));
+                }
+            }
+            case "maxpetspeedmultiplier" -> {
+                double multiplier = Double.parseDouble(value);
+                if (multiplier > 4.0) {
+                    source.sendMessage(Text.of("§7Warning: Very high speed multipliers may look unnatural or cause pathfinding issues"));
+                }
+            }
+            case "petspeedmindistance" -> {
+                double minDist = Double.parseDouble(value);
+                if (minDist < 3.0) {
+                    source.sendMessage(Text.of("§7Note: Very low min distances may cause frequent speed changes"));
                 }
             }
         }

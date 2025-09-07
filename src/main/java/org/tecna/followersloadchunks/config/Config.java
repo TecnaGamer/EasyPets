@@ -21,6 +21,14 @@ public class Config {
     public int maxNavigationRange = 320; // Maximum navigation range in blocks (used in FollowOwnerGoalMixin)
     public boolean enableDebugLogging = false;
 
+    // Dynamic Pet Speed Settings
+    public boolean enableDynamicPetSpeed = true;
+    public double petSpeedMinDistance = 6.0; // Distance where pets start speeding up
+    public double petSpeedMaxDistance = -1.0; // -1 means use petTeleportDistance
+    public double minPetSpeedMultiplier = 0.8; // Speed when player is stationary
+    public double maxPetSpeedMultiplier = 2.5; // Maximum speed boost
+    public double playerSpeedThreshold = 0.1; // Minimum player movement to trigger speed changes
+
     // Save options (used in PetRecoveryCommand)
     public boolean triggerSaveOnPetLocator = false;
     public boolean triggerSaveOnRecovery = false;
@@ -60,7 +68,7 @@ public class Config {
     }
 
     private void validateAndFixValues() {
-        // Simple validation for the few options we have left
+        // Existing validation
         if (petTeleportDistance < 1.0) petTeleportDistance = 1.0;
         if (petTeleportDistance > 100.0) petTeleportDistance = 100.0;
 
@@ -69,6 +77,32 @@ public class Config {
 
         if (maxNavigationRange < 32) maxNavigationRange = 32;
         if (maxNavigationRange > 1000) maxNavigationRange = 1000;
+
+        // Dynamic Pet Speed validation
+        if (petSpeedMinDistance < 1.0) petSpeedMinDistance = 1.0;
+        if (petSpeedMinDistance > 50.0) petSpeedMinDistance = 50.0;
+
+        // If petSpeedMaxDistance is -1, use petTeleportDistance, otherwise validate
+        if (petSpeedMaxDistance <= 0) {
+            petSpeedMaxDistance = petTeleportDistance;
+        } else {
+            if (petSpeedMaxDistance > 100.0) petSpeedMaxDistance = 100.0;
+            if (petSpeedMaxDistance <= petSpeedMinDistance) {
+                petSpeedMaxDistance = petSpeedMinDistance + 2.0;
+            }
+        }
+
+        if (minPetSpeedMultiplier < 0.1) minPetSpeedMultiplier = 0.1;
+        if (minPetSpeedMultiplier > 2.0) minPetSpeedMultiplier = 2.0;
+
+        if (maxPetSpeedMultiplier < 1.0) maxPetSpeedMultiplier = 1.0;
+        if (maxPetSpeedMultiplier > 10.0) maxPetSpeedMultiplier = 10.0;
+        if (maxPetSpeedMultiplier <= minPetSpeedMultiplier) {
+            maxPetSpeedMultiplier = minPetSpeedMultiplier + 0.5;
+        }
+
+        if (playerSpeedThreshold < 0.01) playerSpeedThreshold = 0.01;
+        if (playerSpeedThreshold > 1.0) playerSpeedThreshold = 1.0;
     }
 
     public void saveConfig() {
@@ -98,6 +132,17 @@ public class Config {
     public int getMaxChunkLoadingDistance() { return maxChunkLoadingDistance; }
     public int getMaxNavigationRange() { return maxNavigationRange; }
 
+    // Dynamic Pet Speed getters
+    public boolean isDynamicPetSpeedEnabled() { return enableDynamicPetSpeed; }
+    public double getPetSpeedMinDistance() { return petSpeedMinDistance; }
+    public double getPetSpeedMaxDistance() {
+        // Always return the actual teleport distance if set to -1
+        return petSpeedMaxDistance <= 0 ? petTeleportDistance : petSpeedMaxDistance;
+    }
+    public double getMinPetSpeedMultiplier() { return minPetSpeedMultiplier; }
+    public double getMaxPetSpeedMultiplier() { return maxPetSpeedMultiplier; }
+    public double getPlayerSpeedThreshold() { return playerSpeedThreshold; }
+
     // Keep this for the teleport distance calculation
     public double getPetTeleportDistanceSquared() {
         double blocksDistance = petTeleportDistance * 16.0;
@@ -113,6 +158,14 @@ public class Config {
         System.out.println("  Debug Logging: " + enableDebugLogging);
         System.out.println("  Max Chunk Loading Distance: " + maxChunkLoadingDistance);
         System.out.println("  Max Navigation Range: " + maxNavigationRange + " blocks");
+        System.out.println("  ");
+        System.out.println("  Dynamic Pet Speed: " + enableDynamicPetSpeed);
+        if (enableDynamicPetSpeed) {
+            System.out.println("    Target Distance: " + petSpeedMinDistance + " blocks");
+            System.out.println("    Min Speed Multiplier: " + minPetSpeedMultiplier + "x");
+            System.out.println("    Max Speed Multiplier: " + maxPetSpeedMultiplier + "x");
+            System.out.println("    Player Speed Threshold: " + playerSpeedThreshold + " blocks/tick");
+        }
         System.out.println("  System: Player-based (like ender pearls)");
     }
 }
