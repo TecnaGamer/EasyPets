@@ -203,7 +203,12 @@ public class PetRecoveryCommand {
             for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
                 if (entity instanceof net.minecraft.entity.passive.TameableEntity pet) {
                     if (pet.isTamed() && pet.getOwner() == targetPlayer) {
-                        String petType = pet.getClass().getSimpleName().replace("Entity", "");
+                        // Fix: Use entity type ID instead of class name
+                        String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(pet.getType()).toString();
+                        String petType = entityId.replace("minecraft:", "");
+                        // Capitalize first letter for display
+                        petType = petType.substring(0, 1).toUpperCase() + petType.substring(1);
+
                         String worldName = world.getRegistryKey().getValue().toString().replace("minecraft:", "");
 
                         String displayName = pet.hasCustomName() ?
@@ -214,7 +219,7 @@ public class PetRecoveryCommand {
 
                         PetDetails details = new PetDetails(
                                 pet.getUuid(),
-                                petType,
+                                entityId, // Use full entity ID for consistency
                                 displayName,
                                 pet.getX(),
                                 pet.getY(),
