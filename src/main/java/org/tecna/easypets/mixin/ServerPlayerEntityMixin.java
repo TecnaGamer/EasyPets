@@ -164,7 +164,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
                     this.petChunkPositions.put(petUUID, chunkPos);
 
                     if (Config.getInstance().isDebugLoggingEnabled()) {
-                        System.out.println("[FollowersLoadChunks] Restored chunk ticket for pet " + petUUID + " at " + chunkPos + " in " + worldKey);
+                        System.out.println("[EasyPets] Restored chunk ticket for pet " + petUUID + " at " + chunkPos + " in " + worldKey);
                     }
                     break;
                 }

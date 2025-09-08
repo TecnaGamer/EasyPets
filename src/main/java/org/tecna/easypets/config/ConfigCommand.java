@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
 import java.util.HashMap;
@@ -133,7 +134,7 @@ public class ConfigCommand {
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             dispatcher.register(literal("petconfig")
-                    .requires(source -> source.hasPermissionLevel(4)) // Require admin level
+                    .requires(source -> hasPermission(source, "easypets.admin.config", 3)) // Require moderator level or permission
                     .executes(ConfigCommand::executeShowAll) // Default: show all settings
                     .then(literal("reload")
                             .executes(ConfigCommand::executeReload))
@@ -213,6 +214,102 @@ public class ConfigCommand {
                                     })
                                     .executes(ConfigCommand::executeSetSetting)))); // Set setting value
         });
+    }
+
+    /**
+     * Check permissions using LuckPerms if available, otherwise fall back to vanilla permission levels
+     */
+    private static boolean hasPermission(ServerCommandSource source, String permission, int fallbackLevel) {
+        // First check if this is a player command
+        if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
+            // Console/command blocks always have permission for admin commands
+            return true;
+        }
+
+        // Try LuckPerms integration first
+        Boolean luckPermsResult = hasLuckPermsPermission(player, permission);
+        if (luckPermsResult != null) {
+            // LuckPerms has an explicit answer (true or false)
+            return luckPermsResult;
+        }
+
+        // LuckPerms not available or permission undefined - fall back to vanilla permission level
+        // Special case: level 0 means "allow all players"
+        if (fallbackLevel == 0) {
+            return true; // Allow all players
+        }
+
+        return source.hasPermissionLevel(fallbackLevel);
+    }
+
+    /**
+     * Check LuckPerms permission using reflection to avoid hard dependency
+     * Returns null if LuckPerms is not available or permission is undefined
+     * Returns true/false only if permission is explicitly set
+     */
+    private static Boolean hasLuckPermsPermission(ServerPlayerEntity player, String permission) {
+        try {
+            // Try to get LuckPerms API
+            Class<?> luckPermsClass = Class.forName("net.luckperms.api.LuckPerms");
+            Object luckPermsApi = luckPermsClass.getMethod("getApi").invoke(null);
+
+            // Get UserManager
+            Object userManager = luckPermsApi.getClass().getMethod("getUserManager").invoke(luckPermsApi);
+
+            // Get User by UUID
+            Object user = userManager.getClass().getMethod("getUser", java.util.UUID.class)
+                    .invoke(userManager, player.getUuid());
+
+            if (user == null) {
+                // User not loaded in LuckPerms, fall back to vanilla
+                return null;
+            }
+
+            // Get CachedPermissionData
+            Object cachedData = user.getClass().getMethod("getCachedData").invoke(user);
+            Object permissionData = cachedData.getClass().getMethod("getPermissionData").invoke(cachedData);
+
+            // Check permission
+            Object queryOptions = null;
+            try {
+                // Try to get QueryOptions for the player's current context
+                Class<?> queryOptionsClass = Class.forName("net.luckperms.api.query.QueryOptions");
+                Class<?> contextManagerClass = Class.forName("net.luckperms.api.context.ContextManager");
+                Object contextManager = luckPermsApi.getClass().getMethod("getContextManager").invoke(luckPermsApi);
+                queryOptions = contextManagerClass.getMethod("getQueryOptions", player.getClass())
+                        .invoke(contextManager, player);
+            } catch (Exception e) {
+                // If we can't get QueryOptions, try with defaultContextualSubject
+                try {
+                    Class<?> queryOptionsClass = Class.forName("net.luckperms.api.query.QueryOptions");
+                    queryOptions = queryOptionsClass.getMethod("defaultContextualSubject").invoke(null);
+                } catch (Exception e2) {
+                    // Last resort - try without QueryOptions (older LuckPerms versions)
+                    Object tristate = permissionData.getClass().getMethod("checkPermission", String.class)
+                            .invoke(permissionData, permission);
+                    String result = tristate.toString();
+                    if ("TRUE".equals(result)) return true;
+                    if ("FALSE".equals(result)) return false;
+                    return null; // UNDEFINED - fall back to vanilla
+                }
+            }
+
+            // Check permission with QueryOptions
+            Object tristate = permissionData.getClass().getMethod("checkPermission", String.class, queryOptions.getClass())
+                    .invoke(permissionData, permission, queryOptions);
+
+            String result = tristate.toString();
+            if ("TRUE".equals(result)) return true;
+            if ("FALSE".equals(result)) return false;
+            return null; // UNDEFINED - fall back to vanilla
+
+        } catch (Exception e) {
+            // LuckPerms not available or error occurred, fall back to vanilla
+            if (Config.getInstance().isDebugLoggingEnabled()) {
+                System.out.println("[EasyPets] LuckPerms not available or error checking permission '" + permission + "': " + e.getMessage());
+            }
+            return null;
+        }
     }
 
     private static int executeShowAll(CommandContext<ServerCommandSource> context) {

@@ -3,10 +3,10 @@
   "id": "easypets",
   "version": "${version}",
   "name": "EasyPets",
-  "description": "Make your pets easier to manage with chunk loading, smart recovery, and dynamic speed adjustments",
-  "authors": ["Tecna"],
+  "description": "Make your pets easier to manage with chunk loading, smart recovery, natural regen, and dynamic running",
+  "authors": ["TecnaGamer"],
   "contact": {},
-  "license": "All-Rights-Reserved",
+  "license": "MIT",
   "icon": "assets/easypets/icon.png",
   "environment": "*",
   "entrypoints": {
