@@ -48,6 +48,14 @@ public class ConfigCommand {
                 "Increase if pets teleport too often, decrease for performance"
         ));
 
+        // Auto-recovery option
+        SETTING_INFO.put("autoRecoverOnFirstJoin", new SettingInfo(
+                "autoRecoverOnFirstJoin", "boolean",
+                "Automatically run pet recovery when joining world for first time",
+                "Helps players find their pets when first installing the mod on existing worlds",
+                "Enable for user-friendly experience, disable if you prefer manual control"
+        ));
+
         // Dynamic Pet Running settings
         SETTING_INFO.put("enableDynamicRunning", new SettingInfo(
                 "enableDynamicRunning", "boolean",
@@ -62,7 +70,6 @@ public class ConfigCommand {
                 "Pets closer than this distance use normal speed",
                 "Lower values = pets run faster more often, higher = only when far"
         ));
-
 
         SETTING_INFO.put("maxRunningMultiplier", new SettingInfo(
                 "maxRunningMultiplier", "1.0-10.0",
@@ -184,27 +191,28 @@ public class ConfigCommand {
                                                     builder.suggest("480");  // Higher
                                                     builder.suggest("640");  // Very high
                                                 } else if (settingName.equals("runningTargetDistance")) {
-                                                    builder.suggest("4.0");  // Closer
-                                                    builder.suggest("6.0");  // Default
-                                                    builder.suggest("8.0");  // Further
+                                                    builder.suggest("4.0");  // Default
+                                                    builder.suggest("6.0");  // Further
+                                                    builder.suggest("8.0");  // Much further
                                                 } else if (settingName.equals("maxRunningMultiplier")) {
-                                                    builder.suggest("1.5");  // Conservative
-                                                    builder.suggest("2.5");  // Default
-                                                    builder.suggest("3.0");  // Fast
+                                                    builder.suggest("1.5");  // Default
+                                                    builder.suggest("2.0");  // Faster
+                                                    builder.suggest("2.5");  // Very fast
                                                 } else if (settingName.equals("regenDelayTicks")) {
-                                                    builder.suggest("300");   // 15 seconds
-                                                    builder.suggest("600");   // 30 seconds (default)
+                                                    builder.suggest("300");   // 15 seconds (default)
+                                                    builder.suggest("600");   // 30 seconds
                                                     builder.suggest("1200");  // 1 minute
                                                     builder.suggest("2400");  // 2 minutes
                                                 } else if (settingName.equals("regenAmountPerSecond")) {
-                                                    builder.suggest("0.01");   // Very slow
-                                                    builder.suggest("0.025");  // Default (horse-like)
-                                                    builder.suggest("0.05");   // Slow
-                                                    builder.suggest("0.1");    // Medium
+                                                    builder.suggest("0.05");   // Default
+                                                    builder.suggest("0.1");    // Faster
+                                                    builder.suggest("0.025");  // Slower
+                                                    builder.suggest("0.2");    // Very fast
                                                 } else if (settingName.equals("regenMaxHealthPercent")) {
-                                                    builder.suggest("0.5");   // 50%
-                                                    builder.suggest("0.75");  // 75%
                                                     builder.suggest("1.0");   // 100% (default)
+                                                    builder.suggest("0.8");   // 80%
+                                                    builder.suggest("0.75");  // 75%
+                                                    builder.suggest("0.5");   // 50%
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -330,6 +338,7 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§f  teleportDistance: §b" + config.getTeleportDistance() + " blocks"));
         source.sendMessage(Text.of("§f  maxChunkDistance: §b" + config.getMaxChunkDistance() + " chunks"));
         source.sendMessage(Text.of("§f  navigationScanningRange: §b" + config.getNavigationScanningRange() + " blocks"));
+        source.sendMessage(Text.of("§f  autoRecoverOnFirstJoin: §" + (config.shouldAutoRecoverOnFirstJoin() ? "aEnabled" : "cDisabled")));
         source.sendMessage(Text.of(""));
 
         // Dynamic Pet Running
@@ -505,6 +514,7 @@ public class ConfigCommand {
             case "teleportDistance" -> String.valueOf(config.getTeleportDistance());
             case "maxChunkDistance" -> String.valueOf(config.getMaxChunkDistance());
             case "navigationScanningRange" -> String.valueOf(config.getNavigationScanningRange());
+            case "autoRecoverOnFirstJoin" -> String.valueOf(config.shouldAutoRecoverOnFirstJoin());
             case "enableDynamicRunning" -> String.valueOf(config.isDynamicRunningEnabled());
             case "runningTargetDistance" -> String.valueOf(config.getRunningTargetDistance());
             case "maxRunningMultiplier" -> String.valueOf(config.getMaxRunningMultiplier());
@@ -547,6 +557,10 @@ public class ConfigCommand {
                         config.navigationScanningRange = i;
                         return true;
                     }
+                }
+                case "autoRecoverOnFirstJoin" -> {
+                    config.autoRecoverOnFirstJoin = Boolean.parseBoolean(value);
+                    return true;
                 }
                 case "enableDynamicRunning" -> {
                     config.enableDynamicRunning = Boolean.parseBoolean(value);
@@ -622,6 +636,13 @@ public class ConfigCommand {
             case "enableChunkLoading" -> {
                 if (!Boolean.parseBoolean(value)) {
                     source.sendMessage(Text.of("§7Note: Existing chunk tickets will auto-expire in 5 seconds"));
+                }
+            }
+            case "autoRecoverOnFirstJoin" -> {
+                if (!Boolean.parseBoolean(value)) {
+                    source.sendMessage(Text.of("§7Note: Players will need to manually run /petrecovery when they first join"));
+                } else {
+                    source.sendMessage(Text.of("§7Note: Pet recovery will automatically run 5 seconds after first join"));
                 }
             }
             case "enableDynamicRunning" -> {

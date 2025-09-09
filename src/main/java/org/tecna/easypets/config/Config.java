@@ -21,6 +21,9 @@ public class Config {
     public int navigationScanningRange = 320; // Maximum navigation range in blocks
     public boolean enableDebugLogging = false;
 
+    // Auto-recovery feature
+    public boolean autoRecoverOnFirstJoin = true; // Automatically run pet recovery when joining world for first time
+
     // Dynamic Pet Running Settings
     public boolean enableDynamicRunning = true;
     public double runningTargetDistance = 4.0; // Distance where pets start running faster
@@ -86,7 +89,6 @@ public class Config {
         if (runningTargetDistance < 1.0) runningTargetDistance = 1.0;
         if (runningTargetDistance > 50.0) runningTargetDistance = 50.0;
 
-
         if (maxRunningMultiplier < 1.0) maxRunningMultiplier = 1.0;
         if (maxRunningMultiplier > 10.0) maxRunningMultiplier = 10.0;
 
@@ -130,6 +132,7 @@ public class Config {
             case "teleportDistance" -> String.valueOf(defaultConfig.teleportDistance);
             case "maxChunkDistance" -> String.valueOf(defaultConfig.maxChunkDistance);
             case "navigationScanningRange" -> String.valueOf(defaultConfig.navigationScanningRange);
+            case "autoRecoverOnFirstJoin" -> String.valueOf(defaultConfig.autoRecoverOnFirstJoin);
             case "enableDynamicRunning" -> String.valueOf(defaultConfig.enableDynamicRunning);
             case "runningTargetDistance" -> String.valueOf(defaultConfig.runningTargetDistance);
             case "maxRunningMultiplier" -> String.valueOf(defaultConfig.maxRunningMultiplier);
@@ -154,6 +157,7 @@ public class Config {
         this.teleportDistance = defaultConfig.teleportDistance;
         this.maxChunkDistance = defaultConfig.maxChunkDistance;
         this.navigationScanningRange = defaultConfig.navigationScanningRange;
+        this.autoRecoverOnFirstJoin = defaultConfig.autoRecoverOnFirstJoin;
         this.enableDynamicRunning = defaultConfig.enableDynamicRunning;
         this.runningTargetDistance = defaultConfig.runningTargetDistance;
         this.maxRunningMultiplier = defaultConfig.maxRunningMultiplier;
@@ -172,6 +176,7 @@ public class Config {
     public double getTeleportDistance() { return teleportDistance; }
     public boolean shouldSaveOnLocate() { return saveOnLocate; }
     public boolean shouldSaveOnRecovery() { return saveOnRecovery; }
+    public boolean shouldAutoRecoverOnFirstJoin() { return autoRecoverOnFirstJoin; }
     public boolean isDebugLoggingEnabled() { return enableDebugLogging; }
     public int getMaxChunkDistance() { return maxChunkDistance; }
     public int getNavigationScanningRange() { return navigationScanningRange; }
@@ -198,6 +203,7 @@ public class Config {
         System.out.println("[EasyPets] Current Configuration:");
         System.out.println("  Chunk Loading Enabled: " + enableChunkLoading);
         System.out.println("  Pet Teleport Distance: " + teleportDistance + " blocks");
+        System.out.println("  Auto-Recover on First Join: " + autoRecoverOnFirstJoin);
         System.out.println("  Save on /petlocate: " + saveOnLocate);
         System.out.println("  Save on Recovery: " + saveOnRecovery);
         System.out.println("  Debug Logging: " + enableDebugLogging);

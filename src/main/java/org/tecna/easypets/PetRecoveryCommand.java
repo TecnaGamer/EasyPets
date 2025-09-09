@@ -16,6 +16,7 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
 import net.minecraft.world.storage.StorageKey;
 import org.tecna.easypets.config.Config;
+import org.tecna.easypets.util.SaveUtil;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -543,47 +544,60 @@ public class PetRecoveryCommand {
         }
     }
 
+
     private static void recoverPlayerPets(ServerPlayerEntity player, boolean locateOnly) {
         CompletableFuture.runAsync(() -> {
             UUID playerUUID = player.getUuid();
             try {
                 Config config = Config.getInstance();
+                String operation = locateOnly ? "pet location scan" : "pet recovery";
 
+                // Handle world save if enabled using the new SaveUtil
                 if ((locateOnly && config.shouldSaveOnLocate()) || (!locateOnly && config.shouldSaveOnRecovery())) {
                     player.sendMessage(Text.of("§7[EasyPets] Saving world to ensure accurate pet data..."));
 
-                    CompletableFuture<Void> saveFuture = CompletableFuture.runAsync(() -> {
-                        try {
-                            player.getServer().saveAll(false, false, true);
-                            if (config.isDebugLoggingEnabled()) {
-                                System.out.println("[EasyPets] World save completed before " + (locateOnly ? "pet location scan" : "recovery"));
-                            }
-                        } catch (Exception e) {
-                            if (config.isDebugLoggingEnabled()) {
-                                System.out.println("[EasyPets] Error during world save: " + e.getMessage());
-                            }
-                        }
-                    });
-
                     try {
-                        saveFuture.get();
-                        Thread.sleep(1000);
-                        player.sendMessage(Text.of("§a[EasyPets] World save completed"));
-                    } catch (Exception e) {
-                        player.sendMessage(Text.of("§c[EasyPets] Warning: Save may not have completed properly"));
-                        if (config.isDebugLoggingEnabled()) {
-                            System.out.println("[EasyPets] Save wait error: " + e.getMessage());
+                        // Use the new SaveUtil which executes vanilla save-all flush command
+                        Boolean saveResult = SaveUtil.triggerFullSave(player.getServer()).get();
+
+                        if (saveResult) {
+                            player.sendMessage(Text.of("§a[EasyPets] World save completed successfully"));
+                            if (config.isDebugLoggingEnabled()) {
+                                System.out.println("[EasyPets] World save completed successfully for " + operation);
+                            }
+                            // Give save operation time to complete fully
+                            //Thread.sleep(2000);
+                        } else {
+                            player.sendMessage(Text.of("§c[EasyPets] Warning: World save failed - pet data may be outdated"));
+                            if (config.isDebugLoggingEnabled()) {
+                                System.out.println("[EasyPets] Save operation failed for player: " + player.getGameProfile().getName());
+                            }
                         }
+                    } catch (Exception e) {
+                        player.sendMessage(Text.of("§c[EasyPets] Warning: Save operation encountered an error - continuing anyway"));
+                        if (config.isDebugLoggingEnabled()) {
+                            System.out.println("[EasyPets] Save operation exception: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }
+                } else {
+                    if (config.isDebugLoggingEnabled()) {
+                        System.out.println("[EasyPets] Skipping world save for " + operation + " (disabled in config)");
                     }
                 }
 
                 if (locateOnly) {
-                    player.sendMessage(Text.of("§e⚠ Pet locations shown are from the last world save and may not reflect current positions"));
-                    player.sendMessage(Text.of("§aScanning for your pet locations..."));
+                    if (config.shouldSaveOnLocate()) {
+                        player.sendMessage(Text.of("§aScanning for your pet locations..."));
+                    } else {
+                        player.sendMessage(Text.of("§e⚠ Pet locations shown are from the last world save and may not reflect current positions"));
+                        player.sendMessage(Text.of("§aScanning for your pet locations..."));
+                    }
                 } else {
                     player.sendMessage(Text.of("§aScanning for your pets to recover..."));
                 }
 
+                // Rest of the pet scanning logic remains the same...
                 List<PetInfo> standingPets = new ArrayList<>();
                 List<PetInfo> sittingPets = new ArrayList<>();
                 List<PetInfo> roamingPets = new ArrayList<>();
@@ -626,6 +640,7 @@ public class PetRecoveryCommand {
                 player.sendMessage(Text.of("§cError during pet scan: " + e.getMessage()));
                 Config config = Config.getInstance();
                 if (config.isDebugLoggingEnabled()) {
+                    System.out.println("[EasyPets] Exception in recoverPlayerPets: " + e.getMessage());
                     e.printStackTrace();
                 }
             } finally {
