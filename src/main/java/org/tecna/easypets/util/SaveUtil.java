@@ -5,11 +5,6 @@ import java.util.concurrent.CompletableFuture;
 
 public final class SaveUtil {
 
-    /**
-     * Triggers a full world save using the vanilla save-all flush command
-     * This is more reliable than calling saveAll() directly because it uses
-     * the exact same code path as the vanilla command
-     */
     public static CompletableFuture<Boolean> triggerFullSave(MinecraftServer server) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
@@ -18,10 +13,7 @@ public final class SaveUtil {
             try {
                 // Execute the vanilla save-all flush command
                 // "flush" forces chunk storage IO immediately
-                server.getCommandManager().executeWithPrefix(
-                        server.getCommandSource(),
-                        "save-all"
-                );
+                server.saveAll(false, false, false);
 
                 // Since executeWithPrefix returns void, we assume success if no exception
                 future.complete(true);
