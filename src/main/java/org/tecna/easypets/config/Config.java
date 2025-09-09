@@ -16,7 +16,7 @@ public class Config {
 
     // Core functionality - only what we actually use
     public boolean enableChunkLoading = true;
-    public double teleportDistance = 12.0; // Distance in blocks before pet tries to teleport
+    public double teleportDistance = 6.0; // Distance in chunks before pet tries to teleport
     public int maxChunkDistance = 2; // Chunk loading radius
     public int navigationScanningRange = 320; // Maximum navigation range in blocks
     public boolean enableDebugLogging = false;
@@ -27,7 +27,7 @@ public class Config {
     // Dynamic Pet Running Settings
     public boolean enableDynamicRunning = true;
     public double runningTargetDistance = 4.0; // Distance where pets start running faster
-    public double maxRunningMultiplier = 1.5; // Maximum running speed boost
+    public double maxRunningMultiplier = 1.6; // Maximum running speed boost
     public double playerMovementThreshold = 0.1; // Minimum player movement to trigger speed changes
 
     // Natural Regeneration Settings

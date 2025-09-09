@@ -676,27 +676,27 @@ public class ConfigCommand {
             }
             case "teleportDistance" -> {
                 double distance = Double.parseDouble(value);
-                if (distance < 8.0) {
+                if (distance < 0.5) {
                     source.sendMessage(Text.of("§7Note: Very low teleport distances may cause pets to teleport frequently"));
-                } else if (distance > 32.0) {
+                } else if (distance > 16.0) {
                     source.sendMessage(Text.of("§7Note: Very high teleport distances may cause pets to get lost more easily"));
                 }
             }
             case "maxRunningMultiplier" -> {
                 double multiplier = Double.parseDouble(value);
-                if (multiplier > 4.0) {
+                if (multiplier > 2.0) {
                     source.sendMessage(Text.of("§7Warning: Very high running multipliers may look unnatural or cause pathfinding issues"));
                 }
             }
             case "runningTargetDistance" -> {
                 double minDist = Double.parseDouble(value);
-                if (minDist < 3.0) {
+                if (minDist < 4.0) {
                     source.sendMessage(Text.of("§7Note: Very low target distances may cause frequent speed changes"));
                 }
             }
             case "regenAmountPerSecond" -> {
                 float amount = Float.parseFloat(value);
-                if (amount > 2.0f) {
+                if (amount > 1.0f) {
                     source.sendMessage(Text.of("§7Warning: Very high regeneration rates may make pets overpowered"));
                 }
             }
