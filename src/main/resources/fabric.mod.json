@@ -3,9 +3,15 @@
   "id": "easypets",
   "version": "${version}",
   "name": "EasyPets",
-  "description": "Make your pets easier to manage with chunk loading, smart recovery, natural regen, and dynamic running",
+  "description": "Make your pets easier to manage with chunk loading, smart recovery, natural regeneration, and dynamic running!",
   "authors": ["TecnaGamer"],
-  "contact": {},
+  "contact": {
+    "source": "https://github.com/TecnaGamer/EasyPets",
+    "issues": "https://github.com/TecnaGamer/EasyPets/issues",
+    "discord": "https://discord.gg/TanrrCmRCa",
+    "donate": "https://ko-fi.com/tecnagamer"
+
+  },
   "license": "MIT",
   "icon": "assets/easypets/icon.png",
   "environment": "*",
@@ -20,6 +26,6 @@
   "depends": {
     "fabricloader": "*",
     "fabric": "*",
-    "minecraft": "*"
+    "minecraft": ">=1.21.6"
   }
 }
