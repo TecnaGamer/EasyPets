@@ -16,7 +16,7 @@ public class Config {
 
     // Core functionality - only what we actually use
     public boolean enableChunkLoading = true;
-    public double teleportDistance = 6.0; // Distance in chunks before pet tries to teleport
+    public double teleportDistance = 48; // Distance in blocks before pet tries to teleport (changed from 6.0 to match vanilla)
     public int maxChunkDistance = 2; // Chunk loading radius
     public int navigationScanningRange = 320; // Maximum navigation range in blocks
     public boolean enableDebugLogging = false;
@@ -26,7 +26,7 @@ public class Config {
 
     // Dynamic Pet Running Settings
     public boolean enableDynamicRunning = true;
-    public double runningTargetDistance = 4.0; // Distance where pets start running faster
+    public double runningTargetDistance = 6.0; // Distance where pets start running faster
     public double maxRunningMultiplier = 1.6; // Maximum running speed boost
     public double playerMovementThreshold = 0.1; // Minimum player movement to trigger speed changes
 
@@ -75,9 +75,9 @@ public class Config {
     }
 
     private void validateAndFixValues() {
-        // Core validation
+        // Core validation - now actually in blocks
         if (teleportDistance < 1.0) teleportDistance = 1.0;
-        if (teleportDistance > 100.0) teleportDistance = 100.0;
+        if (teleportDistance > 200.0) teleportDistance = 200.0; // Increased max since we're using blocks now
 
         if (maxChunkDistance < 1) maxChunkDistance = 1;
         if (maxChunkDistance > 10) maxChunkDistance = 10;
@@ -193,16 +193,15 @@ public class Config {
     public float getRegenAmountPerSecond() { return regenAmountPerSecond; }
     public float getRegenMaxHealthPercent() { return regenMaxHealthPercent; }
 
-    // Keep this for the teleport distance calculation
+    // FIXED: Now actually returns squared distance in blocks, not chunks
     public double getTeleportDistanceSquared() {
-        double blocksDistance = teleportDistance * 16.0;
-        return blocksDistance * blocksDistance;
+        return teleportDistance * teleportDistance; // Removed the * 16.0 conversion
     }
 
     public void printCurrentConfig() {
         System.out.println("[EasyPets] Current Configuration:");
         System.out.println("  Chunk Loading Enabled: " + enableChunkLoading);
-        System.out.println("  Pet Teleport Distance: " + teleportDistance + " blocks");
+        System.out.println("  Pet Teleport Distance: " + teleportDistance + " blocks"); // Now actually blocks!
         System.out.println("  Auto-Recover on First Join: " + autoRecoverOnFirstJoin);
         System.out.println("  Save on /petlocate: " + saveOnLocate);
         System.out.println("  Save on Recovery: " + saveOnRecovery);

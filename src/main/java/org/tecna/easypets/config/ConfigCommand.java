@@ -28,7 +28,7 @@ public class ConfigCommand {
         ));
 
         SETTING_INFO.put("teleportDistance", new SettingInfo(
-                "teleportDistance", "1.0-100.0",
+                "teleportDistance", "1.0-∞", // Updated range - now actually in blocks
                 "Distance in blocks before pets try to teleport to owner",
                 "Vanilla default is 12 blocks. Lower = pets stay closer",
                 "Adjust based on your server's playstyle preferences"
@@ -42,10 +42,10 @@ public class ConfigCommand {
         ));
 
         SETTING_INFO.put("navigationScanningRange", new SettingInfo(
-                "navigationScanningRange", "32-1000",
+                "navigationScanningRange", "8-1000",
                 "Maximum navigation range in blocks for pet pathfinding",
                 "Higher values let pets search further before teleporting",
-                "Increase if pets teleport too often, decrease for performance"
+                "Increase if pets have trouble pathfinding, decrease for performance"
         ));
 
         // Auto-recovery option
@@ -176,28 +176,32 @@ public class ConfigCommand {
                                                     builder.suggest("true");
                                                     builder.suggest("false");
                                                 } else if (settingName.equals("teleportDistance")) {
-                                                    builder.suggest("12.0"); // Default (vanilla)
-                                                    builder.suggest("8.0");  // Closer
-                                                    builder.suggest("16.0"); // Further
-                                                    builder.suggest("24.0"); // Much further
+                                                    builder.suggest("12"); // Default (vanilla)
+                                                    builder.suggest("24"); // A bit further
+                                                    builder.suggest("48"); // Much further
+                                                    builder.suggest("96"); // Very far
+                                                    builder.suggest("192"); // Extra far for large builds
+                                                    builder.suggest("384");
+                                                    builder.suggest("768");
                                                 } else if (settingName.equals("maxChunkDistance")) {
                                                     builder.suggest("1");
                                                     builder.suggest("2"); // Default
                                                     builder.suggest("3");
                                                     builder.suggest("4");
                                                 } else if (settingName.equals("navigationScanningRange")) {
-                                                    builder.suggest("160");  // Lower
-                                                    builder.suggest("320");  // Default
-                                                    builder.suggest("480");  // Higher
-                                                    builder.suggest("640");  // Very high
+                                                    builder.suggest("16");
+                                                    builder.suggest("64");
+                                                    builder.suggest("128");
+                                                    builder.suggest("256");
+                                                    builder.suggest("512");
                                                 } else if (settingName.equals("runningTargetDistance")) {
                                                     builder.suggest("4.0");  // Default
                                                     builder.suggest("6.0");  // Further
                                                     builder.suggest("8.0");  // Much further
                                                 } else if (settingName.equals("maxRunningMultiplier")) {
-                                                    builder.suggest("1.5");  // Default
-                                                    builder.suggest("2.0");  // Faster
-                                                    builder.suggest("2.5");  // Very fast
+                                                    builder.suggest("1.6");  // Default
+                                                    builder.suggest("1.8");  // Faster
+                                                    builder.suggest("2.0");  // Very fast
                                                 } else if (settingName.equals("regenDelayTicks")) {
                                                     builder.suggest("300");   // 15 seconds (default)
                                                     builder.suggest("600");   // 30 seconds
@@ -372,12 +376,6 @@ public class ConfigCommand {
         source.sendMessage(Text.of("§f  enableDebugLogging: §" + (config.isDebugLoggingEnabled() ? "aEnabled" : "cDisabled")));
         source.sendMessage(Text.of(""));
 
-        // System info
-        source.sendMessage(Text.of("§6System Info:"));
-        source.sendMessage(Text.of("§7  Chunk System: §fPlayer-based (like ender pearls)"));
-        source.sendMessage(Text.of("§7  Ticket Expiry: §f5 seconds auto-renewal"));
-        source.sendMessage(Text.of("§7  Performance: §fOptimized for reliability"));
-
         return 1;
     }
 
@@ -539,7 +537,7 @@ public class ConfigCommand {
                 }
                 case "teleportDistance" -> {
                     double d = Double.parseDouble(value);
-                    if (d >= 1.0 && d <= 100.0) {
+                    if (d >= 1.0) {
                         config.teleportDistance = d;
                         return true;
                     }
@@ -553,7 +551,7 @@ public class ConfigCommand {
                 }
                 case "navigationScanningRange" -> {
                     int i = Integer.parseInt(value);
-                    if (i >= 32 && i <= 1000) {
+                    if (i >= 8 && i <= 1000) {
                         config.navigationScanningRange = i;
                         return true;
                     }
@@ -668,17 +666,17 @@ public class ConfigCommand {
             }
             case "navigationScanningRange" -> {
                 int range = Integer.parseInt(value);
-                if (range > 500) {
+                if (range > 300) {
                     source.sendMessage(Text.of("§7Warning: Very high navigation ranges may cause server lag"));
-                } else if (range < 100) {
-                    source.sendMessage(Text.of("§7Note: Very low navigation ranges may cause pets to teleport frequently"));
+                } else if (range < 16) {
+                    source.sendMessage(Text.of("§7Note: Very low navigation ranges may cause pets to pathfind poorly"));
                 }
             }
             case "teleportDistance" -> {
                 double distance = Double.parseDouble(value);
-                if (distance < 0.5) {
+                if (distance < 8.0) {
                     source.sendMessage(Text.of("§7Note: Very low teleport distances may cause pets to teleport frequently"));
-                } else if (distance > 16.0) {
+                } else if (distance > 48.0) {
                     source.sendMessage(Text.of("§7Note: Very high teleport distances may cause pets to get lost more easily"));
                 }
             }
