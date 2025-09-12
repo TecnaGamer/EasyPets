@@ -18,7 +18,7 @@ public class Config {
     public boolean enableChunkLoading = true;
     public double teleportDistance = 48; // Distance in blocks before pet tries to teleport (changed from 6.0 to match vanilla)
     public int maxChunkDistance = 2; // Chunk loading radius
-    public int navigationScanningRange = 320; // Maximum navigation range in blocks
+    public int navigationScanningRange = 64; // Maximum navigation range in blocks
     public boolean enableDebugLogging = false;
 
     // Auto-recovery feature
