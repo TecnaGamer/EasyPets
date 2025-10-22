@@ -68,7 +68,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
         // Check if auto-recovery is enabled
         if (!config.shouldAutoRecoverOnFirstJoin()) {
             if (config.isDebugLoggingEnabled()) {
-                System.out.println("[EasyPets] Auto-recovery disabled in config for player: " + player.getGameProfile().getName());
+                System.out.println("[EasyPets] Auto-recovery disabled in config for player: " + player.getGameProfile().name());
             }
             return;
         }
@@ -77,7 +77,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
         hasPerformedFirstTimeRecovery = true;
 
         if (config.isDebugLoggingEnabled()) {
-            System.out.println("[EasyPets] Performing first-time pet recovery for player: " + player.getGameProfile().getName());
+            System.out.println("[EasyPets] Performing first-time pet recovery for player: " + player.getGameProfile().name());
         }
 
         // Send welcome message
@@ -90,7 +90,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
                 player.sendMessage(Text.of("§7[EasyPets] Ensuring world is saved for accurate pet data..."), false);
 
                 // Use SaveUtil which executes vanilla save-all flush command
-                Boolean saveResult = org.tecna.easypets.util.SaveUtil.triggerFullSave(player.getServer()).get();
+                Boolean saveResult = org.tecna.easypets.util.SaveUtil.triggerFullSave(player.getEntityWorld().getServer()).get();
 
                 if (saveResult) {
                     if (config.isDebugLoggingEnabled()) {
@@ -124,9 +124,9 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
         // Find all current pets that should load chunks
         Map<UUID, ChunkPos> currentPets = new HashMap<>();
 
-        for (ServerWorld world : player.getServer().getWorlds()) {
+        for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
             // Only check pets in the same dimension as player
-            if (!world.getRegistryKey().equals(player.getWorld().getRegistryKey())) {
+            if (!world.getRegistryKey().equals(player.getEntityWorld().getRegistryKey())) {
                 continue;
             }
 
@@ -149,7 +149,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
             ChunkPos chunkPos = entry.getValue();
 
             // Add ticket with short expiry (like ender pearls)
-            ((ServerWorld) player.getWorld()).getChunkManager().addTicket(
+            ((ServerWorld) player.getEntityWorld()).getChunkManager().addTicket(
                     PetChunkTickets.PET_TICKET_TYPE,
                     chunkPos,
                     Config.getInstance().getMaxChunkDistance()
@@ -187,7 +187,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
 
                 // Verify pet still exists and should be loading chunks
                 boolean shouldSave = false;
-                for (ServerWorld world : player.getServer().getWorlds()) {
+                for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
                     if (world.getEntity(petUUID) instanceof TameableEntity pet) {
                         if (pet.isTamed() && pet.getOwner() == player &&
                                 !pet.isSitting() && !pet.isLeashed() && !isIndependent(pet)) {
@@ -203,7 +203,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
                     writeView.putLong("pet_uuid_least", petUUID.getLeastSignificantBits());
                     writeView.putInt("chunk_x", chunkPos.x);
                     writeView.putInt("chunk_z", chunkPos.z);
-                    writeView.putString("world", player.getWorld().getRegistryKey().getValue().toString());
+                    writeView.putString("world", player.getEntityWorld().getRegistryKey().getValue().toString());
                 }
             }
         }
@@ -222,7 +222,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
             ticksSinceJoin = 0;
 
             if (Config.getInstance().isDebugLoggingEnabled()) {
-                System.out.println("[EasyPets] Player " + player.getGameProfile().getName() + " joining for first time with EasyPets");
+                System.out.println("[EasyPets] Player " + player.getGameProfile().name() + " joining for first time with EasyPets");
             }
         }
 
@@ -242,7 +242,7 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
             String worldKey = petView.getString("world", "");
 
             // Find the correct world and immediately add ticket
-            for (ServerWorld world : player.getServer().getWorlds()) {
+            for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
                 if (world.getRegistryKey().getValue().toString().equals(worldKey)) {
                     // Immediately add chunk ticket like ender pearls do
                     world.getChunkManager().addTicket(

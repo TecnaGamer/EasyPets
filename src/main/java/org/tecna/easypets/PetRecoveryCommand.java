@@ -176,7 +176,7 @@ public class PetRecoveryCommand {
                 if (playerPetCount > 0) {
                     totalPlayersWithPets++;
                     totalChunkLoadingPets += playerPetCount;
-                    source.sendMessage(Text.of("§f" + player.getGameProfile().getName() + ": §6" + playerPetCount + " pets loading chunks"));
+                    source.sendMessage(Text.of("§f" + player.getGameProfile().name() + ": §6" + playerPetCount + " pets loading chunks"));
                 }
             }
         }
@@ -187,7 +187,7 @@ public class PetRecoveryCommand {
     }
 
     private static void showDetailedPlayerStats(ServerCommandSource source, ServerPlayerEntity targetPlayer) {
-        source.sendMessage(Text.of("§a=== Pet Stats for " + targetPlayer.getGameProfile().getName() + " ==="));
+        source.sendMessage(Text.of("§a=== Pet Stats for " + targetPlayer.getGameProfile().name() + " ==="));
 
         if (!(targetPlayer instanceof SimplePetTracker tracker)) {
             source.sendError(Text.of("Player data not available"));
@@ -396,7 +396,7 @@ public class PetRecoveryCommand {
             }
 
             source.sendMessage(Text.of("§e=== Player Reset Complete ==="));
-            source.sendMessage(Text.of("§7Player: §f" + targetPlayer.getGameProfile().getName()));
+            source.sendMessage(Text.of("§7Player: §f" + targetPlayer.getGameProfile().name()));
             source.sendMessage(Text.of("§7Cleared tracking for: §c" + petCount + " pets"));
 
             targetPlayer.sendMessage(Text.of("§7[EasyPets] Your pet chunk loading data has been reset by an admin"));
@@ -423,7 +423,7 @@ public class PetRecoveryCommand {
             if (player instanceof SimplePetTracker tracker) {
                 int petCount = tracker.getChunkLoadingPets().size();
                 playersWithData++;
-                source.sendMessage(Text.of("  • §f" + player.getGameProfile().getName() + " §7(§6" + petCount + " pets§7)"));
+                source.sendMessage(Text.of("  • §f" + player.getGameProfile().name() + " §7(§6" + petCount + " pets§7)"));
             }
         }
 
@@ -439,7 +439,7 @@ public class PetRecoveryCommand {
             try {
                 player.sendMessage(Text.of("§aDebugging first region file..."), false);
 
-                Path worldPath = player.getServer().getSavePath(WorldSavePath.ROOT).normalize();
+                Path worldPath = player.getEntityWorld().getServer().getSavePath(WorldSavePath.ROOT).normalize();
                 Path entitiesPath = worldPath.resolve("entities");
 
                 if (!Files.exists(entitiesPath)) {
@@ -480,7 +480,7 @@ public class PetRecoveryCommand {
         int regionZ = Integer.parseInt(parts[2]);
         player.sendMessage(Text.of("§7Region coordinates: " + regionX + ", " + regionZ), false);
 
-        StorageKey storageKey = new StorageKey("entities", player.getWorld().getRegistryKey(), "entities");
+        StorageKey storageKey = new StorageKey("entities", player.getEntityWorld().getRegistryKey(), "entities");
 
         try (RegionFile regionFile = new RegionFile(storageKey, regionPath, regionPath.getParent(), false)) {
             int totalChunks = 0;
@@ -558,7 +558,7 @@ public class PetRecoveryCommand {
 
                     try {
                         // Use the new SaveUtil which executes vanilla save-all flush command
-                        Boolean saveResult = SaveUtil.triggerFullSave(player.getServer()).get();
+                        Boolean saveResult = SaveUtil.triggerFullSave(player.getEntityWorld().getServer()).get();
 
                         if (saveResult) {
                             player.sendMessage(Text.of("§a[EasyPets] World save completed successfully"));
@@ -570,7 +570,7 @@ public class PetRecoveryCommand {
                         } else {
                             player.sendMessage(Text.of("§c[EasyPets] Warning: World save failed - pet data may be outdated"));
                             if (config.isDebugLoggingEnabled()) {
-                                System.out.println("[EasyPets] Save operation failed for player: " + player.getGameProfile().getName());
+                                System.out.println("[EasyPets] Save operation failed for player: " + player.getGameProfile().name());
                             }
                         }
                     } catch (Exception e) {
@@ -609,14 +609,14 @@ public class PetRecoveryCommand {
                 int totalRegionFiles = countTotalRegionFiles(player);
                 int processedFiles = 0;
 
-                for (ServerWorld world : player.getServer().getWorlds()) {
+                for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
                     int[] counts = scanWorldForPets(player, world, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs, processedFiles, totalRegionFiles);
                     totalFiles += counts[0];
                     totalChunks += counts[1];
                     processedFiles += counts[0];
                 }
 
-                Path worldPath = player.getServer().getSavePath(WorldSavePath.ROOT).normalize();
+                Path worldPath = player.getEntityWorld().getServer().getSavePath(WorldSavePath.ROOT).normalize();
                 int[] additionalCounts = scanAdditionalDimensions(player, worldPath, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs);
                 totalFiles += additionalCounts[0];
                 totalChunks += additionalCounts[1];
@@ -648,7 +648,7 @@ public class PetRecoveryCommand {
                     playersCurrentlyScanning.remove(playerUUID);
                 }
                 if (Config.getInstance().isDebugLoggingEnabled()) {
-                    System.out.println("[EasyPets] Removed player " + player.getGameProfile().getName() + " from scanning set");
+                    System.out.println("[EasyPets] Removed player " + player.getGameProfile().name() + " from scanning set");
                 }
             }
         });
@@ -657,9 +657,9 @@ public class PetRecoveryCommand {
     private static int countTotalRegionFiles(ServerPlayerEntity player) {
         int total = 0;
         try {
-            Path worldPath = player.getServer().getSavePath(WorldSavePath.ROOT).normalize();
+            Path worldPath = player.getEntityWorld().getServer().getSavePath(WorldSavePath.ROOT).normalize();
 
-            for (ServerWorld world : player.getServer().getWorlds()) {
+            for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
                 List<Path> possiblePaths = getPossibleEntityPaths(world, worldPath);
                 for (Path entitiesPath : possiblePaths) {
                     if (Files.exists(entitiesPath)) {
@@ -891,7 +891,7 @@ public class PetRecoveryCommand {
         int chunksScanned = 0;
 
         try {
-            Path worldPath = player.getServer().getSavePath(WorldSavePath.ROOT).normalize();
+            Path worldPath = player.getEntityWorld().getServer().getSavePath(WorldSavePath.ROOT).normalize();
             List<Path> possibleEntityPaths = getPossibleEntityPaths(world, worldPath);
 
             for (Path entitiesPath : possibleEntityPaths) {
@@ -993,7 +993,7 @@ public class PetRecoveryCommand {
             }
 
             Set<String> processedWorlds = new HashSet<>();
-            for (ServerWorld world : player.getServer().getWorlds()) {
+            for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
                 String worldName = world.getRegistryKey().getValue().toString();
                 processedWorlds.add(worldName);
             }

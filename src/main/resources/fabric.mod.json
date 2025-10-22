@@ -24,8 +24,12 @@
     "easypets.mixins.json"
   ],
   "depends": {
-    "fabricloader": "*",
-    "fabric": "*",
-    "minecraft": ">=1.21.6"
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.21.9",
+    "java": ">=21"
+  },
+  "suggests": {
+    "another-mod": "*"
   }
 }

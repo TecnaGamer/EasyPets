@@ -6,13 +6,13 @@ import net.minecraft.server.world.ChunkTicketType;
 
 public class PetChunkTickets {
     // Longer-lived ticket since player renews every 20 ticks
+    // Similar to ENDER_PEARL: loads chunks, enables simulation, resets idle timeout
     public static final ChunkTicketType PET_TICKET_TYPE = Registry.register(
             Registries.TICKET_TYPE,
             "pet_chunk_loader",
             new ChunkTicketType(
                     100L, // 5 seconds expiry - gives buffer for player renewal
-                    false, // Don't persist across restarts
-                    ChunkTicketType.Use.LOADING_AND_SIMULATION
+                    ChunkTicketType.FOR_LOADING | ChunkTicketType.FOR_SIMULATION | ChunkTicketType.RESETS_IDLE_TIMEOUT
             )
     );
 
