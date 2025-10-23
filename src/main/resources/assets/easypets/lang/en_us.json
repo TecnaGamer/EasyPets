@@ -99,6 +99,18 @@
   "easypets.locator.total_pets": "= %s pets",
   "easypets.locator.status_vehicle": " [IN VEHICLE]",
   "easypets.locator.status_leashed": " [LEASHED]",
+
+  "easypets.petglow.title": "Pet Glow Effect",
+  "easypets.petglow.applied": "Applied glowing effect to %s pets!",
+  "easypets.petglow.duration": "Effect will last for 30 seconds (colors update dynamically)",
+  "easypets.petglow.no_pets": "No pets found to apply glowing effect to",
+  "easypets.petglow.legend": "Pet Color Legend:",
+  "easypets.petglow.legend.following": "⚡ %s Following pets (§aGreen glow§r)",
+  "easypets.petglow.legend.sitting": "⸭ %s Sitting pets (§9Blue glow§r)", 
+  "easypets.petglow.legend.roaming": "🐎 %s Roaming pets (§6Gold glow§r)",
+  "easypets.petglow.legend.independent": "🐾 %s Independent pets (§dMagenta glow§r)",
+  "easypets.petglow.legend.leashed": "🔗 %s Leashed/Vehicle pets (§cRed glow§r)",
+  "easypets.petglow.hint": "Use /petlocator to see exact coordinates of your pets",
   
   "easypets.scan.world_found": "Found %s %s region files",
   "easypets.scan.world_error": "Error scanning world %s: %s",

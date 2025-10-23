@@ -2,15 +2,22 @@ package org.tecna.easypets;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.entity.passive.TameableEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.nbt.*;
+import net.minecraft.scoreboard.Team;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
@@ -25,6 +32,11 @@ import java.nio.file.Path;
 
 import static java.util.stream.Collectors.groupingBy;
 import static net.minecraft.server.command.CommandManager.literal;
+import java.util.stream.Stream;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class PetRecoveryCommand {
 
@@ -36,6 +48,10 @@ public class PetRecoveryCommand {
 
     // Spam protection - track players currently running scans
     private static final Set<UUID> playersCurrentlyScanning = new HashSet<>();
+    
+    // Glow effect management
+    private static final ScheduledExecutorService glowScheduler = Executors.newScheduledThreadPool(2);
+    private static final Map<UUID, GlowSession> activeGlowSessions = new ConcurrentHashMap<>();
     
     // Helper method to create formatted text using server-side translations
     private static Text formatted(String color, String translationKey, Object... args) {
@@ -54,6 +70,9 @@ public class PetRecoveryCommand {
 
             dispatcher.register(literal("petlocator")
                     .executes(PetRecoveryCommand::executePetLocator));
+
+            dispatcher.register(literal("petglow")
+                    .executes(PetRecoveryCommand::executePetGlow));
 
             // Admin commands - require permissions
             dispatcher.register(literal("debugregion")
@@ -1512,6 +1531,441 @@ public class PetRecoveryCommand {
 
         String getLocationString() {
             return String.format("(%.1f, %.1f, %.1f)", x, y, z);
+        }
+    }
+
+    private static int executePetGlow(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+
+        if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
+            source.sendError(formatted("§c", "easypets.command.error.players_only"));
+            return 0;
+        }
+
+        UUID playerUUID = player.getUuid();
+        synchronized (playersCurrentlyScanning) {
+            if (playersCurrentlyScanning.contains(playerUUID)) {
+                source.sendError(formatted("§c", "easypets.command.error.already_scanning"));
+                return 0;
+            }
+            playersCurrentlyScanning.add(playerUUID);
+        }
+
+        try {
+            applyGlowingEffectToPets(player);
+        } finally {
+            synchronized (playersCurrentlyScanning) {
+                playersCurrentlyScanning.remove(playerUUID);
+            }
+        }
+        return 1;
+    }
+
+    private static void applyGlowingEffectToPets(ServerPlayerEntity player) {
+        MinecraftServer server = player.getEntityWorld().getServer();
+        if (server == null) return;
+
+        UUID playerId = player.getUuid();
+        String playerPrefix = "petglow_" + player.getUuidAsString().substring(0, 8);
+        
+        // Cancel existing glow session if running
+        GlowSession existingSession = activeGlowSessions.get(playerId);
+        if (existingSession != null) {
+            existingSession.cancel();
+            cleanupPlayerTeams(server, playerPrefix);
+        }
+        
+        // Create teams for different pet states with different colors
+        Map<String, Team> colorTeams = new HashMap<>();
+        Map<String, Formatting> colorMap = Map.of(
+            "following", Formatting.GREEN,
+            "sitting", Formatting.BLUE, 
+            "roaming", Formatting.GOLD,
+            "independent", Formatting.LIGHT_PURPLE,
+            "leashed", Formatting.RED
+        );
+        
+        // Remove existing teams if they exist and create new ones
+        for (String colorKey : colorMap.keySet()) {
+            String teamName = playerPrefix + "_" + colorKey;
+            Team existingTeam = server.getScoreboard().getTeam(teamName);
+            if (existingTeam != null) {
+                server.getScoreboard().removeTeam(existingTeam);
+            }
+            
+            Team team = server.getScoreboard().addTeam(teamName);
+            team.setShowFriendlyInvisibles(true);
+            team.setColor(colorMap.get(colorKey));
+            colorTeams.put(colorKey, team);
+        }
+        
+        List<PetInfo> standingPets = new ArrayList<>();
+        List<PetInfo> sittingPets = new ArrayList<>();
+        List<PetInfo> roamingPets = new ArrayList<>();
+        List<PetInfo> independentPets = new ArrayList<>();
+        Set<UUID> foundPetUUIDs = new HashSet<>();
+        int glowingPets = 0;
+
+        // Find all loaded pets first (for immediate effect)
+        for (ServerWorld world : server.getWorlds()) {
+            for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                // Check for tameable entities (wolves, cats, parrots, etc.)
+                if (entity instanceof TameableEntity pet && pet.isTamed() && pet.getOwner() == player) {
+                    applyGlowToPet(pet, server, colorTeams, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs, world);
+                    glowingPets++;
+                }
+                // Check for horses, donkeys, mules, llamas
+                else if (entity instanceof AbstractHorseEntity horse && horse.isTame() && horse.getOwner() == player) {
+                    applyGlowToHorse(horse, server, colorTeams, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs, world);
+                    glowingPets++;
+                }
+            }
+        }
+        
+        // Create and start new glow session with dynamic state tracking
+        GlowSession session = new GlowSession(server, player, playerPrefix, colorTeams, colorMap);
+        activeGlowSessions.put(playerId, session);
+        session.start();
+        
+        // Report results to player
+        reportGlowingPets(player, standingPets, sittingPets, roamingPets, independentPets, glowingPets);
+    }
+    
+    private static void applyGlowToPet(TameableEntity pet, MinecraftServer server, Map<String, Team> colorTeams,
+                                       List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, 
+                                       List<PetInfo> independentPets, Set<UUID> foundPetUUIDs, ServerWorld world) {
+        // Apply glowing effect
+        StatusEffectInstance glowingEffect = new StatusEffectInstance(
+                StatusEffects.GLOWING, 
+                600, // 30 seconds (20 ticks per second)
+                0, 
+                false, 
+                false, 
+                true
+        );
+        pet.addStatusEffect(glowingEffect);
+        
+        // Determine pet state and assign to appropriate colored team
+        String petState;
+        String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(pet.getType()).toString();
+        
+        if (pet.getVehicle() != null) { // Pet is in a boat or other vehicle
+            petState = "leashed"; // Use red color for pets in vehicles
+        } else if (pet.isLeashed()) {
+            petState = "leashed";
+        } else if (pet.isSitting()) {
+            petState = "sitting"; // Sitting takes priority over independent
+        } else if (isIndependentPet(pet)) {
+            petState = "independent";
+        } else if (ROAMING_PET_TYPES.contains(entityId)) {
+            petState = "roaming";
+        } else {
+            petState = "following";
+        }
+        
+        // Add pet to the appropriate colored team
+        Team petTeam = colorTeams.get(petState);
+        if (petTeam != null) {
+            server.getScoreboard().addScoreHolderToTeam(pet.getUuidAsString(), petTeam);
+        }
+        
+        foundPetUUIDs.add(pet.getUuid());
+        
+        // Categorize pet for reporting
+        String displayName = pet.hasCustomName() ?
+                pet.getCustomName().getString() + " (" + entityId.replace("minecraft:", "") + ")" :
+                entityId.replace("minecraft:", "");
+        
+        PetInfo petInfo = new PetInfo(
+                pet.getUuid(),
+                entityId,
+                pet.hasCustomName() ? pet.getCustomName().getString() : null,
+                pet.getX(),
+                pet.getY(),
+                pet.getZ(),
+                pet.getChunkPos(),
+                world,
+                pet.isSitting(),
+                pet.isLeashed(),
+                pet.getVehicle() != null, // Check if pet is in vehicle
+                isIndependentPet(pet),
+                false, // hasHomePos - not available from loaded entity
+                0, 0, 0 // home coordinates
+        );
+        
+        if (pet.isSitting()) {
+            sittingPets.add(petInfo); // Sitting takes priority for categorization too
+        } else if (isIndependentPet(pet)) {
+            independentPets.add(petInfo);
+        } else if (ROAMING_PET_TYPES.contains(entityId)) {
+            roamingPets.add(petInfo);
+        } else {
+            standingPets.add(petInfo);
+        }
+    }
+    
+    private static void applyGlowToHorse(AbstractHorseEntity horse, MinecraftServer server, Map<String, Team> colorTeams,
+                                         List<PetInfo> standingPets, List<PetInfo> sittingPets, List<PetInfo> roamingPets, 
+                                         List<PetInfo> independentPets, Set<UUID> foundPetUUIDs, ServerWorld world) {
+        // Apply glowing effect
+        StatusEffectInstance glowingEffect = new StatusEffectInstance(
+                StatusEffects.GLOWING, 
+                600, // 30 seconds (20 ticks per second)
+                0, 
+                false, 
+                false, 
+                true
+        );
+        horse.addStatusEffect(glowingEffect);
+        
+        // Determine horse state
+        String petState;
+        String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(horse.getType()).toString();
+        
+        if (horse.getVehicle() != null) { // Horse is in a vehicle (unlikely but possible)
+            petState = "leashed"; // Use red color
+        } else if (horse.isLeashed()) {
+            petState = "leashed";
+        } else {
+            petState = "roaming"; // All horses are considered roaming pets
+        }
+        
+        // Add horse to the appropriate colored team
+        Team petTeam = colorTeams.get(petState);
+        if (petTeam != null) {
+            server.getScoreboard().addScoreHolderToTeam(horse.getUuidAsString(), petTeam);
+        }
+        
+        foundPetUUIDs.add(horse.getUuid());
+        
+        // Categorize horse for reporting
+        String displayName = horse.hasCustomName() ?
+                horse.getCustomName().getString() + " (" + entityId.replace("minecraft:", "") + ")" :
+                entityId.replace("minecraft:", "");
+        
+        PetInfo petInfo = new PetInfo(
+                horse.getUuid(),
+                entityId,
+                horse.hasCustomName() ? horse.getCustomName().getString() : null,
+                horse.getX(),
+                horse.getY(),
+                horse.getZ(),
+                horse.getChunkPos(),
+                world,
+                false, // Horses don't sit
+                horse.isLeashed(),
+                horse.getVehicle() != null, // Check if horse is in vehicle
+                false, // Horses aren't independent pets
+                false, // hasHomePos - not available from loaded entity
+                0, 0, 0 // home coordinates
+        );
+        
+        // All horses go to roaming pets category
+        roamingPets.add(petInfo);
+    }
+    
+    private static String getPetGlowColor(TameableEntity pet) {
+        if (pet.isLeashed()) {
+            return "§c"; // Red for leashed pets
+        } else if (pet.isSitting()) {
+            return "§9"; // Blue for sitting pets  
+        } else if (pet.hasVehicle()) {
+            return "§6"; // Gold for pets in vehicles
+        } else if (isIndependentPet(pet)) {
+            return "§d"; // Magenta for independent pets
+        } else {
+            String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(pet.getType()).toString();
+            if (ROAMING_PET_TYPES.contains(entityId)) {
+                return "§6"; // Gold for roaming pets
+            }
+            return "§2"; // Green for following pets
+        }
+    }
+    
+    private static void reportGlowingPets(ServerPlayerEntity player, List<PetInfo> standingPets,
+                                          List<PetInfo> sittingPets, List<PetInfo> roamingPets, 
+                                          List<PetInfo> independentPets, int glowingPets) {
+        player.sendMessage(Text.literal("§a=== " + TranslationManager.getInstance().translate("easypets.petglow.title") + " ==="), false);
+        
+        if (glowingPets == 0) {
+            player.sendMessage(formatted("§7", "easypets.petglow.no_pets"), false);
+            return;
+        }
+        
+        player.sendMessage(formatted("§a", "easypets.petglow.applied", glowingPets), false);
+        player.sendMessage(formatted("§7", "easypets.petglow.duration"), false);
+        player.sendMessage(Text.empty(), false);
+        
+        // Show color legend
+        player.sendMessage(formatted("§7", "easypets.petglow.legend"), false);
+        if (!standingPets.isEmpty()) {
+            player.sendMessage(formatted("§2", "easypets.petglow.legend.following", standingPets.size()), false);
+        }
+        if (!sittingPets.isEmpty()) {
+            player.sendMessage(formatted("§9", "easypets.petglow.legend.sitting", sittingPets.size()), false);
+        }
+        if (!roamingPets.isEmpty()) {
+            player.sendMessage(formatted("§6", "easypets.petglow.legend.roaming", roamingPets.size()), false);
+        }
+        if (!independentPets.isEmpty()) {
+            player.sendMessage(formatted("§d", "easypets.petglow.legend.independent", independentPets.size()), false);
+        }
+        
+        // Count leashed pets from all categories
+        long leashedCount = Stream.of(standingPets, sittingPets, roamingPets, independentPets)
+                .flatMap(List::stream)
+                .filter(pet -> pet.isLeashed)
+                .count();
+        
+        if (leashedCount > 0) {
+            player.sendMessage(formatted("§c", "easypets.petglow.legend.leashed", leashedCount), false);
+        }
+        
+        player.sendMessage(Text.empty(), false);
+        player.sendMessage(formatted("§3", "easypets.petglow.hint"), false);
+    }
+    
+    private static void cleanupPlayerTeams(MinecraftServer server, String playerPrefix) {
+        Map<String, Formatting> colorMap = Map.of(
+            "following", Formatting.GREEN,
+            "sitting", Formatting.BLUE, 
+            "roaming", Formatting.GOLD,
+            "independent", Formatting.LIGHT_PURPLE,
+            "leashed", Formatting.RED
+        );
+        
+        for (String colorKey : colorMap.keySet()) {
+            String teamName = playerPrefix + "_" + colorKey;
+            Team cleanupTeam = server.getScoreboard().getTeam(teamName);
+            if (cleanupTeam != null) {
+                server.getScoreboard().removeTeam(cleanupTeam);
+            }
+        }
+    }
+    
+    private static class GlowSession {
+        private final MinecraftServer server;
+        private final ServerPlayerEntity player;
+        private final String playerPrefix;
+        private final Map<String, Team> colorTeams;
+        private final Map<String, Formatting> colorMap;
+        private ScheduledFuture<?> updateTask;
+        private ScheduledFuture<?> cleanupTask;
+        private volatile boolean cancelled = false;
+        
+        public GlowSession(MinecraftServer server, ServerPlayerEntity player, String playerPrefix, 
+                          Map<String, Team> colorTeams, Map<String, Formatting> colorMap) {
+            this.server = server;
+            this.player = player;
+            this.playerPrefix = playerPrefix;
+            this.colorTeams = colorTeams;
+            this.colorMap = colorMap;
+        }
+        
+        public void start() {
+            // Update pet states every tick (50ms)
+            updateTask = glowScheduler.scheduleAtFixedRate(this::updatePetStates, 50, 50, TimeUnit.MILLISECONDS);
+            
+            // Schedule cleanup after 30 seconds
+            cleanupTask = glowScheduler.schedule(this::cleanup, 32, TimeUnit.SECONDS);
+        }
+        
+        public void cancel() {
+            cancelled = true;
+            if (updateTask != null && !updateTask.isCancelled()) {
+                updateTask.cancel(false);
+            }
+            if (cleanupTask != null && !cleanupTask.isCancelled()) {
+                cleanupTask.cancel(false);
+            }
+        }
+        
+        private void updatePetStates() {
+            if (cancelled || player.isRemoved()) {
+                cleanup();
+                return;
+            }
+            
+            server.execute(() -> {
+                try {
+                    // Update all pets' team assignments based on current state
+                    for (ServerWorld world : server.getWorlds()) {
+                        for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                            if (entity instanceof TameableEntity pet && pet.isTamed() && pet.getOwner() == player) {
+                                updatePetTeamAssignment(pet);
+                            } else if (entity instanceof AbstractHorseEntity horse && horse.isTame() && horse.getOwner() == player) {
+                                updateHorseTeamAssignment(horse);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // If there's an error, clean up to prevent issues
+                    cleanup();
+                }
+            });
+        }
+        
+        private void updatePetTeamAssignment(TameableEntity pet) {
+            // Determine current pet state
+            String petState;
+            String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(pet.getType()).toString();
+            
+            if (pet.getVehicle() != null) {
+                petState = "leashed"; // Use red color for pets in vehicles
+            } else if (pet.isLeashed()) {
+                petState = "leashed";
+            } else if (pet.isSitting()) {
+                petState = "sitting"; // Sitting takes priority over independent
+            } else if (isIndependentPet(pet)) {
+                petState = "independent";
+            } else if (ROAMING_PET_TYPES.contains(entityId)) {
+                petState = "roaming";
+            } else {
+                petState = "following";
+            }
+            
+            // Remove pet from all teams first
+            for (Team team : colorTeams.values()) {
+                team.getPlayerList().remove(pet.getUuidAsString());
+            }
+            
+            // Add pet to the appropriate colored team
+            Team petTeam = colorTeams.get(petState);
+            if (petTeam != null) {
+                server.getScoreboard().addScoreHolderToTeam(pet.getUuidAsString(), petTeam);
+            }
+        }
+        
+        private void updateHorseTeamAssignment(AbstractHorseEntity horse) {
+            // Determine current horse state
+            String petState;
+            
+            if (horse.getVehicle() != null) {
+                petState = "leashed"; // Use red color
+            } else if (horse.isLeashed()) {
+                petState = "leashed";
+            } else {
+                petState = "roaming"; // All horses are considered roaming pets
+            }
+            
+            // Remove horse from all teams first
+            for (Team team : colorTeams.values()) {
+                team.getPlayerList().remove(horse.getUuidAsString());
+            }
+            
+            // Add horse to the appropriate colored team
+            Team petTeam = colorTeams.get(petState);
+            if (petTeam != null) {
+                server.getScoreboard().addScoreHolderToTeam(horse.getUuidAsString(), petTeam);
+            }
+        }
+        
+        private void cleanup() {
+            cancel();
+            server.execute(() -> {
+                cleanupPlayerTeams(server, playerPrefix);
+                activeGlowSessions.remove(player.getUuid());
+            });
         }
     }
 }
