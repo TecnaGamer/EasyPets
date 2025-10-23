@@ -624,13 +624,28 @@ public class PetRecoveryCommand {
                 player.sendMessage(Text.of(" "), true);
                 player.sendMessage(Text.of("§7Scanned " + totalFiles + " region files and " + totalChunks + " chunks"));
 
+                // Update positions of loaded pets for more accurate data and add any loaded pets not found in file scan
+                Set<UUID> loadedPetUUIDs = new HashSet<>();
+                if (locateOnly) {
+                    int updatedCount = updateLoadedPetPositions(player, standingPets, sittingPets, roamingPets, independentPets, loadedPetUUIDs, foundPetUUIDs);
+                    if (updatedCount > 0 && config.isDebugLoggingEnabled()) {
+                        System.out.println("[EasyPets] Updated positions for " + updatedCount + " loaded pets");
+                    }
+                    
+                    // Add any loaded pets that weren't found in the file scan
+                    int addedCount = addMissingLoadedPets(player, standingPets, sittingPets, roamingPets, independentPets, foundPetUUIDs, loadedPetUUIDs);
+                    if (addedCount > 0 && config.isDebugLoggingEnabled()) {
+                        System.out.println("[EasyPets] Added " + addedCount + " loaded pets that weren't in file scan");
+                    }
+                }
+
                 if (standingPets.isEmpty() && sittingPets.isEmpty() && roamingPets.isEmpty() && independentPets.isEmpty()) {
                     player.sendMessage(Text.of("§eNo pets found. All your pets are either already loaded or don't exist."));
                     return;
                 }
 
                 if (locateOnly) {
-                    reportPetLocations(player, standingPets, sittingPets, roamingPets, independentPets);
+                    reportPetLocations(player, standingPets, sittingPets, roamingPets, independentPets, loadedPetUUIDs);
                 } else {
                     loadPetChunks(player, standingPets, sittingPets, roamingPets, independentPets);
                 }
@@ -652,6 +667,145 @@ public class PetRecoveryCommand {
                 }
             }
         });
+    }
+
+    /**
+     * Updates pet positions in the lists by checking currently loaded entities.
+     * Loaded pets have more current positions than those saved in chunk NBT data.
+     * @param loadedPetUUIDs Set to populate with UUIDs of loaded pets
+     * @param foundPetUUIDs Set of pet UUIDs found in file scan
+     * @return Number of pets whose positions were updated
+     */
+    private static int updateLoadedPetPositions(ServerPlayerEntity player, List<PetInfo> standingPets,
+                                                 List<PetInfo> sittingPets, List<PetInfo> roamingPets,
+                                                 List<PetInfo> independentPets, Set<UUID> loadedPetUUIDs,
+                                                 Set<UUID> foundPetUUIDs) {
+        int updatedCount = 0;
+        Map<UUID, TameableEntity> loadedPets = new HashMap<>();
+
+        // First, collect all loaded pets owned by the player
+        for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
+            for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                if (entity instanceof TameableEntity pet) {
+                    if (pet.isTamed() && pet.getOwner() == player) {
+                        loadedPets.put(pet.getUuid(), pet);
+                        loadedPetUUIDs.add(pet.getUuid());
+                    }
+                }
+            }
+        }
+
+        // Update positions in all pet lists
+        updatedCount += updatePetListPositions(standingPets, loadedPets);
+        updatedCount += updatePetListPositions(sittingPets, loadedPets);
+        updatedCount += updatePetListPositions(roamingPets, loadedPets);
+        updatedCount += updatePetListPositions(independentPets, loadedPets);
+
+        return updatedCount;
+    }
+
+    /**
+     * Adds loaded pets that weren't found in the file scan.
+     * This handles pets that have moved to unsaved chunks (e.g., following a fast-moving player).
+     * @return Number of pets added
+     */
+    private static int addMissingLoadedPets(ServerPlayerEntity player, List<PetInfo> standingPets,
+                                            List<PetInfo> sittingPets, List<PetInfo> roamingPets,
+                                            List<PetInfo> independentPets, Set<UUID> foundPetUUIDs,
+                                            Set<UUID> loadedPetUUIDs) {
+        int addedCount = 0;
+
+        // Iterate through all loaded pets and add any that weren't found in the file scan
+        for (ServerWorld world : player.getEntityWorld().getServer().getWorlds()) {
+            for (net.minecraft.entity.Entity entity : world.iterateEntities()) {
+                if (entity instanceof TameableEntity pet) {
+                    if (pet.isTamed() && pet.getOwner() == player) {
+                        UUID petUUID = pet.getUuid();
+                        
+                        // If this pet wasn't found in the file scan, add it now
+                        if (!foundPetUUIDs.contains(petUUID)) {
+                            PetInfo petInfo = createPetInfoFromEntity(pet, world);
+                            if (petInfo != null) {
+                                categorizePet(petInfo, standingPets, sittingPets, roamingPets, independentPets);
+                                foundPetUUIDs.add(petUUID);
+                                addedCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return addedCount;
+    }
+
+    /**
+     * Creates a PetInfo object from a loaded entity
+     */
+    private static PetInfo createPetInfoFromEntity(TameableEntity pet, ServerWorld world) {
+        try {
+            String entityId = net.minecraft.registry.Registries.ENTITY_TYPE.getId(pet.getType()).toString();
+            String customName = pet.hasCustomName() ? pet.getCustomName().getString() : null;
+            double x = pet.getX();
+            double y = pet.getY();
+            double z = pet.getZ();
+            ChunkPos chunkPos = new ChunkPos(pet.getBlockPos());
+            boolean sitting = pet.isSitting();
+            boolean isLeashed = pet.isLeashed();
+            boolean inVehicle = pet.hasVehicle();
+            boolean isIndependent = isIndependentPet(pet);
+            
+            // Try to get IndyPets home position if available
+            boolean hasHomePos = false;
+            int homeX = 0, homeY = 0, homeZ = 0;
+            // Note: We can't easily get home position from the entity without NBT access
+            // This is acceptable since these are loaded pets that weren't in the file scan
+            
+            return new PetInfo(pet.getUuid(), entityId, customName, x, y, z, chunkPos, world,
+                             sitting, isLeashed, inVehicle, isIndependent, hasHomePos, homeX, homeY, homeZ);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Helper method to update positions in a specific pet list
+     */
+    private static int updatePetListPositions(List<PetInfo> petList, Map<UUID, TameableEntity> loadedPets) {
+        int updated = 0;
+        for (int i = 0; i < petList.size(); i++) {
+            PetInfo pet = petList.get(i);
+            TameableEntity loadedPet = loadedPets.get(pet.uuid);
+
+            if (loadedPet != null) {
+                // Pet is loaded - use its current position
+                double currentX = loadedPet.getX();
+                double currentY = loadedPet.getY();
+                double currentZ = loadedPet.getZ();
+
+                // Check if position has changed significantly (more than 0.1 blocks)
+                if (Math.abs(currentX - pet.x) > 0.1 || Math.abs(currentY - pet.y) > 0.1 || Math.abs(currentZ - pet.z) > 0.1) {
+                    ChunkPos currentChunkPos = new ChunkPos(loadedPet.getBlockPos());
+                    ServerWorld currentWorld = (ServerWorld) loadedPet.getEntityWorld();
+                    boolean currentSitting = loadedPet.isSitting();
+                    boolean currentLeashed = loadedPet.isLeashed();
+                    boolean currentInVehicle = loadedPet.hasVehicle();
+
+                    // Create updated PetInfo with current position and state
+                    PetInfo updatedPet = new PetInfo(
+                            pet.uuid, pet.type, pet.customName,
+                            currentX, currentY, currentZ,
+                            currentChunkPos, currentWorld,
+                            currentSitting, currentLeashed, currentInVehicle,
+                            pet.isIndependent, pet.hasHomePos, pet.homeX, pet.homeY, pet.homeZ
+                    );
+
+                    petList.set(i, updatedPet);
+                    updated++;
+                }
+            }
+        }
+        return updated;
     }
 
     private static int countTotalRegionFiles(ServerPlayerEntity player) {
@@ -698,8 +852,12 @@ public class PetRecoveryCommand {
     }
 
     private static void reportPetLocations(ServerPlayerEntity player, List<PetInfo> standingPets,
-                                           List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets) {
+                                           List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets,
+                                           Set<UUID> loadedPetUUIDs) {
         player.sendMessage(Text.of("§a=== Pet Locations ==="), false);
+        if (!loadedPetUUIDs.isEmpty()) {
+            player.sendMessage(Text.of("§7(§a✓§7 = Loaded in memory)"), false);
+        }
 
         Map<String, List<PetInfo>> standingByDimension = standingPets.stream()
                 .collect(groupingBy(pet -> pet.worldName));
@@ -733,7 +891,8 @@ public class PetRecoveryCommand {
                 player.sendMessage(Text.of("§2⚡ Following pets (" + standingInDim.size() + "):"), false);
                 for (PetInfo pet : standingInDim) {
                     String status = getRestrictedPetStatus(pet);
-                    player.sendMessage(Text.of("§f  • " + pet.getDisplayName() + " §7at " + pet.getLocationString() + status), false);
+                    String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
+                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + status), false);
                 }
             }
 
@@ -741,7 +900,8 @@ public class PetRecoveryCommand {
             if (!sittingInDim.isEmpty()) {
                 player.sendMessage(Text.of("§9⸭ Sitting pets (" + sittingInDim.size() + "):"), false);
                 for (PetInfo pet : sittingInDim) {
-                    player.sendMessage(Text.of("§f  • " + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
+                    String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
+                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
                 }
             }
 
@@ -749,7 +909,8 @@ public class PetRecoveryCommand {
             if (!roamingInDim.isEmpty()) {
                 player.sendMessage(Text.of("§6🐎 Roaming pets (" + roamingInDim.size() + "):"), false);
                 for (PetInfo pet : roamingInDim) {
-                    player.sendMessage(Text.of("§f  • " + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
+                    String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
+                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
                 }
             }
 
@@ -758,7 +919,8 @@ public class PetRecoveryCommand {
                 player.sendMessage(Text.of("§d🐾 Independent pets (" + independentInDim.size() + "):"), false);
                 for (PetInfo pet : independentInDim) {
                     String homeInfo = pet.hasHomePos ? " §8[Home: " + pet.getHomePosString() + "]" : "";
-                    player.sendMessage(Text.of("§f  • " + pet.getDisplayName() + " §7at " + pet.getLocationString() + homeInfo), false);
+                    String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
+                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + homeInfo), false);
                 }
             }
 
