@@ -16,6 +16,7 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.storage.RegionFile;
 import net.minecraft.world.storage.StorageKey;
 import org.tecna.easypets.config.Config;
+import org.tecna.easypets.translation.TranslationManager;
 import org.tecna.easypets.util.SaveUtil;
 
 import java.io.*;
@@ -35,6 +36,15 @@ public class PetRecoveryCommand {
 
     // Spam protection - track players currently running scans
     private static final Set<UUID> playersCurrentlyScanning = new HashSet<>();
+    
+    // Helper method to create formatted text using server-side translations
+    private static Text formatted(String color, String translationKey, Object... args) {
+        return TranslationManager.getInstance().text(color, translationKey, args);
+    }
+    
+    private static Text formatted(String color, Text text) {
+        return Text.literal(color).append(text);
+    }
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -158,12 +168,12 @@ public class PetRecoveryCommand {
                 showOverallStats(source);
             }
         } catch (Exception e) {
-            source.sendError(Text.of("Error retrieving pet stats: " + e.getMessage()));
+            source.sendError(formatted("§c", "easypets.command.error.stats_retrieval", e.getMessage()));
         }
     }
 
     private static void showOverallStats(ServerCommandSource source) {
-        source.sendMessage(Text.of("§a=== Pet Chunk Loading Stats ==="));
+        source.sendMessage(Text.literal("§a=== " + TranslationManager.getInstance().translate("easypets.petstats.title") + " ==="));
 
         int totalChunkLoadingPets = 0;
         int totalPlayersWithPets = 0;
@@ -176,21 +186,21 @@ public class PetRecoveryCommand {
                 if (playerPetCount > 0) {
                     totalPlayersWithPets++;
                     totalChunkLoadingPets += playerPetCount;
-                    source.sendMessage(Text.of("§f" + player.getGameProfile().name() + ": §6" + playerPetCount + " pets loading chunks"));
+                    source.sendMessage(Text.literal("§f" + player.getGameProfile().name() + ": §6" + playerPetCount + " pets loading chunks"));
                 }
             }
         }
 
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§7Total: §e" + totalChunkLoadingPets + " pets §7loading chunks across §e" + totalPlayersWithPets + " players"));
-        source.sendMessage(Text.of("§7Use §f/petstats player <name> §7for detailed info"));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§7", "easypets.petstats.total", "§e" + totalChunkLoadingPets, "§e" + totalPlayersWithPets));
+        source.sendMessage(formatted("§7", "easypets.petstats.usage_hint"));
     }
 
     private static void showDetailedPlayerStats(ServerCommandSource source, ServerPlayerEntity targetPlayer) {
-        source.sendMessage(Text.of("§a=== Pet Stats for " + targetPlayer.getGameProfile().name() + " ==="));
+        source.sendMessage(Text.literal("§a=== " + TranslationManager.getInstance().translate("easypets.petstats.player_title", targetPlayer.getGameProfile().name()) + " ==="));
 
         if (!(targetPlayer instanceof SimplePetTracker tracker)) {
-            source.sendError(Text.of("Player data not available"));
+            source.sendError(formatted("§c", "easypets.petstats.player_data_unavailable"));
             return;
         }
 
@@ -242,32 +252,32 @@ public class PetRecoveryCommand {
         }
 
         if (!loadingPets.isEmpty()) {
-            source.sendMessage(Text.of("§6Pets loading chunks (" + loadingPets.size() + "):"));
+            source.sendMessage(formatted("§6", "easypets.petstats.loading_chunks", loadingPets.size()));
             for (PetDetails pet : loadingPets) {
-                source.sendMessage(Text.of("§f• " + pet.displayName + " at " + pet.getLocationString() + " in " + pet.worldName));
+                source.sendMessage(formatted("§f", "easypets.petstats.location", "• " + pet.displayName, pet.getLocationString(), pet.worldName));
             }
         } else {
-            source.sendMessage(Text.of("§7No pets currently loading chunks"));
+            source.sendMessage(formatted("§7", "easypets.petstats.no_loading_chunks"));
         }
 
         if (!sittingPets.isEmpty()) {
-            source.sendMessage(Text.of(""));
-            source.sendMessage(Text.of("§3Sitting pets (" + sittingPets.size() + "):"));
+            source.sendMessage(Text.empty());
+            source.sendMessage(formatted("§3", "easypets.petstats.sitting", sittingPets.size()));
             for (PetDetails pet : sittingPets) {
-                source.sendMessage(Text.of("§f• " + pet.displayName + " at " + pet.getLocationString() + " in " + pet.worldName));
+                source.sendMessage(formatted("§f", "easypets.petstats.location", "• " + pet.displayName, pet.getLocationString(), pet.worldName));
             }
         }
 
         if (!independentPets.isEmpty()) {
-            source.sendMessage(Text.of(""));
-            source.sendMessage(Text.of("§dIndependent pets (" + independentPets.size() + "):"));
+            source.sendMessage(Text.empty());
+            source.sendMessage(formatted("§3", "easypets.petstats.independent", independentPets.size()));
             for (PetDetails pet : independentPets) {
-                source.sendMessage(Text.of("§f• " + pet.displayName + " at " + pet.getLocationString() + " in " + pet.worldName));
+                source.sendMessage(formatted("§f", "easypets.petstats.location", "• " + pet.displayName, pet.getLocationString(), pet.worldName));
             }
         }
 
         if (loadingPets.isEmpty() && sittingPets.isEmpty() && independentPets.isEmpty()) {
-            source.sendMessage(Text.of("§7No pets found for this player"));
+            source.sendMessage(formatted("§7", "easypets.petstats.no_pets"));
         }
     }
 
@@ -275,14 +285,14 @@ public class PetRecoveryCommand {
         ServerCommandSource source = context.getSource();
 
         if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
-            source.sendError(Text.of("This command can only be run by players"));
+            source.sendError(formatted("§c", "easypets.command.error.players_only"));
             return 0;
         }
 
         UUID playerUUID = player.getUuid();
         synchronized (playersCurrentlyScanning) {
             if (playersCurrentlyScanning.contains(playerUUID)) {
-                source.sendError(Text.of("§cYou are already running a pet scan. Please wait for it to complete."));
+                source.sendError(formatted("§c", "easypets.command.error.already_scanning"));
                 return 0;
             }
             playersCurrentlyScanning.add(playerUUID);
@@ -300,14 +310,14 @@ public class PetRecoveryCommand {
         ServerCommandSource source = context.getSource();
 
         if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
-            source.sendError(Text.of("This command can only be run by players"));
+            source.sendError(formatted("§c", "easypets.command.error.players_only"));
             return 0;
         }
 
         UUID playerUUID = player.getUuid();
         synchronized (playersCurrentlyScanning) {
             if (playersCurrentlyScanning.contains(playerUUID)) {
-                source.sendError(Text.of("§cYou are already running a pet scan. Please wait for it to complete."));
+                source.sendError(formatted("§c", "easypets.command.error.already_scanning"));
                 return 0;
             }
             playersCurrentlyScanning.add(playerUUID);
@@ -321,7 +331,7 @@ public class PetRecoveryCommand {
         ServerCommandSource source = context.getSource();
 
         if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
-            source.sendError(Text.of("This command can only be run by players"));
+            source.sendError(formatted("§c", "easypets.command.error.players_only"));
             return 0;
         }
 
@@ -341,7 +351,7 @@ public class PetRecoveryCommand {
             ServerPlayerEntity targetPlayer = net.minecraft.command.argument.EntityArgumentType.getPlayer(context, "playerName");
             showPetStats(source, targetPlayer);
         } catch (Exception e) {
-            source.sendError(Text.of("Player not found"));
+            source.sendError(formatted("§c", "easypets.command.error.player_not_found"));
         }
         return 1;
     }
@@ -358,9 +368,9 @@ public class PetRecoveryCommand {
             }
         }
 
-        source.sendMessage(Text.of("§e=== Forced Cleanup Complete ==="));
-        source.sendMessage(Text.of("§7Cleared tracking for: §c" + totalPets + " pets"));
-        source.sendMessage(Text.of("§7Tickets will auto-expire in 3 seconds"));
+        source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.debug.cleanup_title") + " ==="));
+        source.sendMessage(formatted("§7", "easypets.debug.cleared_tracking", "§c" + totalPets));
+        source.sendMessage(formatted("§7", "easypets.debug.tickets_expire"));
 
         return 1;
     }
@@ -375,10 +385,10 @@ public class PetRecoveryCommand {
             }
         }
 
-        source.sendMessage(Text.of("§e=== Tracked Pets ==="));
-        source.sendMessage(Text.of("§7Total tracked pets: §f" + totalTracked));
-        source.sendMessage(Text.of("§7Note: With the simplified system, we only track pet UUIDs"));
-        source.sendMessage(Text.of("§7Actual chunk tickets auto-expire and aren't centrally tracked"));
+        source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.debug.tracked_pets_title") + " ==="));
+        source.sendMessage(formatted("§7", "easypets.debug.total_tracked", "§f" + totalTracked));
+        source.sendMessage(formatted("§7", "easypets.debug.tracking_note"));
+        source.sendMessage(formatted("§7", "easypets.debug.tickets_note"));
 
         return 1;
     }
@@ -395,14 +405,14 @@ public class PetRecoveryCommand {
                 tracker.getChunkLoadingPets().clear();
             }
 
-            source.sendMessage(Text.of("§e=== Player Reset Complete ==="));
-            source.sendMessage(Text.of("§7Player: §f" + targetPlayer.getGameProfile().name()));
-            source.sendMessage(Text.of("§7Cleared tracking for: §c" + petCount + " pets"));
+            source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.debug.reset_title") + " ==="));
+            source.sendMessage(formatted("§7", "easypets.debug.reset_player", "§f" + targetPlayer.getGameProfile().name()));
+            source.sendMessage(formatted("§7", "easypets.debug.cleared_tracking", "§c" + petCount));
 
-            targetPlayer.sendMessage(Text.of("§7[EasyPets] Your pet chunk loading data has been reset by an admin"));
+            targetPlayer.sendMessage(formatted("§7", "easypets.debug.reset_notification"));
 
         } catch (Exception e) {
-            source.sendError(Text.of("§cPlayer not found or error occurred: " + e.getMessage()));
+            source.sendError(formatted("§c", "easypets.debug.error_occurred", e.getMessage()));
         }
 
         return 1;
@@ -411,24 +421,24 @@ public class PetRecoveryCommand {
     private static int executeDebugVersion(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
-        source.sendMessage(Text.of("§e=== EasyPets Info ==="));
-        source.sendMessage(Text.of("§7Version: §fSimplified System"));
-        source.sendMessage(Text.of("§7Ticket System: §fAuto-expiring (60 ticks)"));
-        source.sendMessage(Text.of("§7Based on: §fVanilla Ender Pearl system"));
-        source.sendMessage(Text.of(""));
+        source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.debug.version_title") + " ==="));
+        source.sendMessage(formatted("§7", "easypets.debug.version"));
+        source.sendMessage(formatted("§7", "easypets.debug.ticket_system"));
+        source.sendMessage(formatted("§7", "easypets.debug.based_on"));
+        source.sendMessage(Text.empty());
 
-        source.sendMessage(Text.of("§7Online Players:"));
+        source.sendMessage(formatted("§7", "easypets.debug.online_players"));
         int playersWithData = 0;
         for (ServerPlayerEntity player : source.getServer().getPlayerManager().getPlayerList()) {
             if (player instanceof SimplePetTracker tracker) {
                 int petCount = tracker.getChunkLoadingPets().size();
                 playersWithData++;
-                source.sendMessage(Text.of("  • §f" + player.getGameProfile().name() + " §7(§6" + petCount + " pets§7)"));
+                source.sendMessage(formatted("§f", "easypets.debug.player_entry", player.getGameProfile().name(), "§6" + petCount));
             }
         }
 
         if (playersWithData == 0) {
-            source.sendMessage(Text.of("§7No players with pet data"));
+            source.sendMessage(formatted("§7", "easypets.debug.no_player_data"));
         }
 
         return 1;
@@ -437,13 +447,13 @@ public class PetRecoveryCommand {
     private static void debugRegionFile(ServerPlayerEntity player) {
         CompletableFuture.runAsync(() -> {
             try {
-                player.sendMessage(Text.of("§aDebugging first region file..."), false);
+                player.sendMessage(formatted("§a", "easypets.debug.region.start"), false);
 
                 Path worldPath = player.getEntityWorld().getServer().getSavePath(WorldSavePath.ROOT).normalize();
                 Path entitiesPath = worldPath.resolve("entities");
 
                 if (!Files.exists(entitiesPath)) {
-                    player.sendMessage(Text.of("§cNo entities directory found"), false);
+                    player.sendMessage(formatted("§c", "easypets.debug.region.no_directory"), false);
                     return;
                 }
 
@@ -452,17 +462,17 @@ public class PetRecoveryCommand {
                         .findFirst();
 
                 if (firstRegion.isEmpty()) {
-                    player.sendMessage(Text.of("§cNo region files found"), false);
+                    player.sendMessage(formatted("§c", "easypets.debug.region.no_files"), false);
                     return;
                 }
 
                 Path regionPath = firstRegion.get();
-                player.sendMessage(Text.of("§7Debugging: " + regionPath.getFileName()), false);
+                player.sendMessage(formatted("§7", "easypets.debug.region.debugging", regionPath.getFileName()), false);
 
                 debugSingleRegionFile(regionPath, player);
 
             } catch (Exception e) {
-                player.sendMessage(Text.of("§cError during debug: " + e.getMessage()), false);
+                player.sendMessage(formatted("§c", "easypets.debug.region.error", e.getMessage()), false);
                 e.printStackTrace();
             }
         });
@@ -472,13 +482,13 @@ public class PetRecoveryCommand {
         String fileName = regionPath.getFileName().toString();
         String[] parts = fileName.replace(".mca", "").split("\\.");
         if (parts.length != 3) {
-            player.sendMessage(Text.of("§cInvalid region file name format"), false);
+            player.sendMessage(formatted("§c", "easypets.debug.region.invalid_format"), false);
             return;
         }
 
         int regionX = Integer.parseInt(parts[1]);
         int regionZ = Integer.parseInt(parts[2]);
-        player.sendMessage(Text.of("§7Region coordinates: " + regionX + ", " + regionZ), false);
+        player.sendMessage(formatted("§7", "easypets.debug.region.coordinates", regionX, regionZ), false);
 
         StorageKey storageKey = new StorageKey("entities", player.getEntityWorld().getRegistryKey(), "entities");
 
@@ -493,33 +503,33 @@ public class PetRecoveryCommand {
 
                     if (regionFile.hasChunk(chunkPos)) {
                         chunksWithData++;
-                        player.sendMessage(Text.of("§7Chunk " + chunkPos + " has data"), false);
+                        player.sendMessage(formatted("§7", "easypets.debug.region.chunk_has_data", chunkPos), false);
 
                         try (DataInputStream inputStream = regionFile.getChunkInputStream(chunkPos)) {
                             if (inputStream != null) {
                                 NbtCompound chunkNbt = NbtIo.readCompound(inputStream, NbtSizeTracker.ofUnlimitedBytes());
                                 if (chunkNbt != null) {
-                                    player.sendMessage(Text.of("§7Chunk NBT keys: " + chunkNbt.getKeys().toString()), false);
+                                    player.sendMessage(formatted("§7", "easypets.debug.region.chunk_keys", chunkNbt.getKeys().toString()), false);
 
                                     if (chunkNbt.contains("Entities")) {
                                         Optional<NbtList> entitiesOpt = chunkNbt.getList("Entities");
                                         if (entitiesOpt.isPresent()) {
                                             NbtList entities = entitiesOpt.get();
-                                            player.sendMessage(Text.of("§aFound " + entities.size() + " entities in chunk " + chunkPos), false);
+                                            player.sendMessage(formatted("§a", "easypets.debug.region.entities_found", entities.size(), chunkPos), false);
 
                                             for (int i = 0; i < Math.min(3, entities.size()); i++) {
                                                 Optional<NbtCompound> entityOpt = entities.getCompound(i);
                                                 if (entityOpt.isPresent()) {
                                                     NbtCompound entity = entityOpt.get();
                                                     String entityId = entity.getString("id", "unknown");
-                                                    player.sendMessage(Text.of("§f  Entity " + i + ": " + entityId), false);
-                                                    player.sendMessage(Text.of("§f  Keys: " + entity.getKeys().toString()), false);
+                                                    player.sendMessage(formatted("§f", "easypets.debug.region.entity_info", i, entityId), false);
+                                                    player.sendMessage(formatted("§f", "easypets.debug.region.entity_keys", entity.getKeys().toString()), false);
 
                                                     if (entityId.contains("wolf") || entityId.contains("cat") || entityId.contains("parrot")) {
-                                                        player.sendMessage(Text.of("§6  This is a potential pet!"), false);
+                                                        player.sendMessage(formatted("§6", "easypets.debug.region.potential_pet"), false);
                                                         entity.getKeys().forEach(key -> {
                                                             if (key.toLowerCase().contains("owner") || key.toLowerCase().contains("tame") || key.toLowerCase().contains("sit") || key.toLowerCase().contains("allowedtofollow") || key.toLowerCase().contains("indypets")) {
-                                                                player.sendMessage(Text.of("§6  " + key + " = " + entity.get(key).toString()), false);
+                                                                player.sendMessage(formatted("§6", "easypets.debug.region.pet_data", key, entity.get(key).toString()), false);
                                                             }
                                                         });
                                                     }
@@ -527,20 +537,20 @@ public class PetRecoveryCommand {
                                             }
                                         }
                                     } else {
-                                        player.sendMessage(Text.of("§cNo 'Entities' key found in chunk NBT"), false);
+                                        player.sendMessage(formatted("§c", "easypets.debug.region.no_entities_key"), false);
                                     }
                                 } else {
-                                    player.sendMessage(Text.of("§cCould not read chunk NBT"), false);
+                                    player.sendMessage(formatted("§c", "easypets.debug.region.nbt_read_error"), false);
                                 }
                             }
                         } catch (Exception e) {
-                            player.sendMessage(Text.of("§cError reading chunk " + chunkPos + ": " + e.getMessage()), false);
+                            player.sendMessage(formatted("§c", "easypets.debug.region.chunk_error", chunkPos, e.getMessage()), false);
                         }
                     }
                 }
             }
 
-            player.sendMessage(Text.of("§7Checked " + totalChunks + " chunk positions, " + chunksWithData + " had data"), false);
+            player.sendMessage(formatted("§7", "easypets.debug.region.summary", totalChunks, chunksWithData), false);
         }
     }
 
@@ -554,27 +564,27 @@ public class PetRecoveryCommand {
 
                 // Handle world save if enabled using the new SaveUtil
                 if ((locateOnly && config.shouldSaveOnLocate()) || (!locateOnly && config.shouldSaveOnRecovery())) {
-                    player.sendMessage(Text.of("§7[EasyPets] Saving world to ensure accurate pet data..."));
+                    player.sendMessage(formatted("§7", "easypets.recovery.saving_world"));
 
                     try {
                         // Use the new SaveUtil which executes vanilla save-all flush command
                         Boolean saveResult = SaveUtil.triggerFullSave(player.getEntityWorld().getServer()).get();
 
                         if (saveResult) {
-                            player.sendMessage(Text.of("§a[EasyPets] World save completed successfully"));
+                            player.sendMessage(formatted("§a", "easypets.recovery.save_complete"));
                             if (config.isDebugLoggingEnabled()) {
                                 System.out.println("[EasyPets] World save completed successfully for " + operation);
                             }
                             // Give save operation time to complete fully
                             //Thread.sleep(2000);
                         } else {
-                            player.sendMessage(Text.of("§c[EasyPets] Warning: World save failed - pet data may be outdated"));
+                            player.sendMessage(formatted("§c", "easypets.recovery.save_failed"));
                             if (config.isDebugLoggingEnabled()) {
                                 System.out.println("[EasyPets] Save operation failed for player: " + player.getGameProfile().name());
                             }
                         }
                     } catch (Exception e) {
-                        player.sendMessage(Text.of("§c[EasyPets] Warning: Save operation encountered an error - continuing anyway"));
+                        player.sendMessage(formatted("§c", "easypets.recovery.save_error"));
                         if (config.isDebugLoggingEnabled()) {
                             System.out.println("[EasyPets] Save operation exception: " + e.getMessage());
                             e.printStackTrace();
@@ -588,13 +598,13 @@ public class PetRecoveryCommand {
 
                 if (locateOnly) {
                     if (config.shouldSaveOnLocate()) {
-                        player.sendMessage(Text.of("§aScanning for your pet locations..."));
+                        player.sendMessage(formatted("§a", "easypets.recovery.scanning_locate"));
                     } else {
-                        player.sendMessage(Text.of("§e⚠ Pet locations shown are from the last world save and may not reflect current positions"));
-                        player.sendMessage(Text.of("§aScanning for your pet locations..."));
+                        player.sendMessage(formatted("§e", "easypets.recovery.locate_warning"));
+                        player.sendMessage(formatted("§a", "easypets.recovery.scanning_locate"));
                     }
                 } else {
-                    player.sendMessage(Text.of("§aScanning for your pets to recover..."));
+                    player.sendMessage(formatted("§a", "easypets.recovery.scanning_recover"));
                 }
 
                 // Rest of the pet scanning logic remains the same...
@@ -621,8 +631,8 @@ public class PetRecoveryCommand {
                 totalFiles += additionalCounts[0];
                 totalChunks += additionalCounts[1];
 
-                player.sendMessage(Text.of(" "), true);
-                player.sendMessage(Text.of("§7Scanned " + totalFiles + " region files and " + totalChunks + " chunks"));
+                player.sendMessage(Text.empty(), true);
+                player.sendMessage(formatted("§7", "easypets.recovery.scanned_summary", totalFiles, totalChunks));
 
                 // Update positions of loaded pets for more accurate data and add any loaded pets not found in file scan
                 Set<UUID> loadedPetUUIDs = new HashSet<>();
@@ -640,7 +650,7 @@ public class PetRecoveryCommand {
                 }
 
                 if (standingPets.isEmpty() && sittingPets.isEmpty() && roamingPets.isEmpty() && independentPets.isEmpty()) {
-                    player.sendMessage(Text.of("§eNo pets found. All your pets are either already loaded or don't exist."));
+                    player.sendMessage(formatted("§e", "easypets.recovery.no_pets_found"));
                     return;
                 }
 
@@ -651,8 +661,8 @@ public class PetRecoveryCommand {
                 }
 
             } catch (Exception e) {
-                player.sendMessage(Text.of(" "), true);
-                player.sendMessage(Text.of("§cError during pet scan: " + e.getMessage()));
+                player.sendMessage(Text.empty(), true);
+                player.sendMessage(formatted("§c", "easypets.recovery.error", e.getMessage()));
                 Config config = Config.getInstance();
                 if (config.isDebugLoggingEnabled()) {
                     System.out.println("[EasyPets] Exception in recoverPlayerPets: " + e.getMessage());
@@ -848,15 +858,15 @@ public class PetRecoveryCommand {
         bar.append("§7] §e").append(String.format("%.1f", percentage)).append("%");
         bar.append(" §7(").append(processed).append("/").append(total).append(")");
 
-        player.sendMessage(Text.of(bar.toString()), true);
+        player.sendMessage(Text.literal(bar.toString()), true);
     }
 
     private static void reportPetLocations(ServerPlayerEntity player, List<PetInfo> standingPets,
                                            List<PetInfo> sittingPets, List<PetInfo> roamingPets, List<PetInfo> independentPets,
                                            Set<UUID> loadedPetUUIDs) {
-        player.sendMessage(Text.of("§a=== Pet Locations ==="), false);
+        player.sendMessage(Text.literal("§a=== " + TranslationManager.getInstance().translate("easypets.locator.title") + " ==="), false);
         if (!loadedPetUUIDs.isEmpty()) {
-            player.sendMessage(Text.of("§7(§a✓§7 = Loaded in memory)"), false);
+            player.sendMessage(formatted("§7", "easypets.locator.loaded_symbol"), false);
         }
 
         Map<String, List<PetInfo>> standingByDimension = standingPets.stream()
@@ -875,7 +885,7 @@ public class PetRecoveryCommand {
         allDimensions.addAll(independentByDimension.keySet());
 
         if (allDimensions.isEmpty()) {
-            player.sendMessage(Text.of("§7No pets found"), false);
+            player.sendMessage(formatted("§7", "easypets.locator.no_pets"), false);
             return;
         }
 
@@ -883,74 +893,74 @@ public class PetRecoveryCommand {
 
         for (String dimension : sortedDimensions) {
             String dimensionColor = getDimensionColor(dimension);
-            player.sendMessage(Text.of(""), false);
-            player.sendMessage(Text.of(dimensionColor + "=== " + dimension.toUpperCase() + " ==="), false);
+            player.sendMessage(Text.empty(), false);
+            player.sendMessage(Text.literal(dimensionColor + "=== " + dimension.toUpperCase() + " ==="), false);
 
             List<PetInfo> standingInDim = standingByDimension.getOrDefault(dimension, List.of());
             if (!standingInDim.isEmpty()) {
-                player.sendMessage(Text.of("§2⚡ Following pets (" + standingInDim.size() + "):"), false);
+                player.sendMessage(formatted("§2", "easypets.locator.following", standingInDim.size()), false);
                 for (PetInfo pet : standingInDim) {
                     String status = getRestrictedPetStatus(pet);
                     String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
-                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + status), false);
+                    player.sendMessage(Text.literal("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + status), false);
                 }
             }
 
             List<PetInfo> sittingInDim = sittingByDimension.getOrDefault(dimension, List.of());
             if (!sittingInDim.isEmpty()) {
-                player.sendMessage(Text.of("§9⸭ Sitting pets (" + sittingInDim.size() + "):"), false);
+                player.sendMessage(formatted("§9", "easypets.locator.sitting", sittingInDim.size()), false);
                 for (PetInfo pet : sittingInDim) {
                     String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
-                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
+                    player.sendMessage(Text.literal("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
                 }
             }
 
             List<PetInfo> roamingInDim = roamingByDimension.getOrDefault(dimension, List.of());
             if (!roamingInDim.isEmpty()) {
-                player.sendMessage(Text.of("§6🐎 Roaming pets (" + roamingInDim.size() + "):"), false);
+                player.sendMessage(formatted("§6", "easypets.locator.roaming", roamingInDim.size()), false);
                 for (PetInfo pet : roamingInDim) {
                     String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
-                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
+                    player.sendMessage(Text.literal("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString()), false);
                 }
             }
 
             List<PetInfo> independentInDim = independentByDimension.getOrDefault(dimension, List.of());
             if (!independentInDim.isEmpty()) {
-                player.sendMessage(Text.of("§d🐾 Independent pets (" + independentInDim.size() + "):"), false);
+                player.sendMessage(formatted("§d", "easypets.locator.independent", independentInDim.size()), false);
                 for (PetInfo pet : independentInDim) {
-                    String homeInfo = pet.hasHomePos ? " §8[Home: " + pet.getHomePosString() + "]" : "";
+                    String homeInfo = pet.hasHomePos ? TranslationManager.getInstance().translate("easypets.locator.home_pos", pet.getHomePosString()) : "";
                     String icon = loadedPetUUIDs.contains(pet.uuid) ? "§a✓" : "§f•";
-                    player.sendMessage(Text.of("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + homeInfo), false);
+                    player.sendMessage(Text.literal("  " + icon + " §f" + pet.getDisplayName() + " §7at " + pet.getLocationString() + homeInfo), false);
                 }
             }
 
             if (standingInDim.isEmpty() && sittingInDim.isEmpty() && roamingInDim.isEmpty() && independentInDim.isEmpty()) {
-                player.sendMessage(Text.of("§8  No pets in this dimension"), false);
+                player.sendMessage(formatted("§8", "easypets.locator.no_dimension_pets"), false);
             }
         }
 
-        player.sendMessage(Text.of(""), false);
+        player.sendMessage(Text.empty(), false);
         int totalPets = standingPets.size() + sittingPets.size() + roamingPets.size() + independentPets.size();
 
         List<String> summaryParts = new ArrayList<>();
-        if (standingPets.size() > 0) summaryParts.add("§2" + standingPets.size() + " following");
-        if (sittingPets.size() > 0) summaryParts.add("§9" + sittingPets.size() + " sitting");
-        if (roamingPets.size() > 0) summaryParts.add("§6" + roamingPets.size() + " roaming");
-        if (independentPets.size() > 0) summaryParts.add("§d" + independentPets.size() + " independent");
+        if (standingPets.size() > 0) summaryParts.add("§2" + standingPets.size() + " " + TranslationManager.getInstance().translate("easypets.locator.summary_following"));
+        if (sittingPets.size() > 0) summaryParts.add("§9" + sittingPets.size() + " " + TranslationManager.getInstance().translate("easypets.locator.summary_sitting"));
+        if (roamingPets.size() > 0) summaryParts.add("§6" + roamingPets.size() + " " + TranslationManager.getInstance().translate("easypets.locator.summary_roaming"));
+        if (independentPets.size() > 0) summaryParts.add("§d" + independentPets.size() + " " + TranslationManager.getInstance().translate("easypets.locator.summary_independent"));
 
         if (summaryParts.isEmpty()) {
-            player.sendMessage(Text.of("§7Total: §e0 pets"), false);
+            player.sendMessage(formatted("§7", "easypets.locator.total", "§e0 pets"), false);
         } else {
             String summaryText = String.join(" §7+ ", summaryParts);
-            player.sendMessage(Text.of("§7Total: " + summaryText + " §7= §e" + totalPets + " pets"), false);
+            player.sendMessage(Text.literal("§7" + TranslationManager.getInstance().translate("easypets.locator.total") + ": " + summaryText + " §7" + TranslationManager.getInstance().translate("easypets.locator.total_pets", "§e" + totalPets)), false);
         }
     }
 
     private static String getRestrictedPetStatus(PetInfo pet) {
         if (pet.inVehicle) {
-            return " §c[IN VEHICLE]";
+            return TranslationManager.getInstance().translate("easypets.locator.status_vehicle");
         } else if (pet.isLeashed) {
-            return " §c[LEASHED]";
+            return TranslationManager.getInstance().translate("easypets.locator.status_leashed");
         }
         return "";
     }
@@ -1017,33 +1027,33 @@ public class PetRecoveryCommand {
             petsToRecover++;
         }
 
-        StringBuilder message = new StringBuilder();
+        Text message;
 
         if (petsToRecover > 0) {
-            message.append("§aFound ").append(petsToRecover).append(" following pets! Chunks loaded, they should teleport to you soon.");
+            message = formatted("§a", "easypets.recovery.found_pets", petsToRecover);
         } else {
-            message.append("§eNo following pets found that can be recovered.");
+            message = formatted("§e", "easypets.recovery.no_following_pets");
         }
 
         if (restrictedPets > 0) {
-            message.append("\n§c").append(restrictedPets).append(" pets are leashed or in vehicles and won't teleport.");
+            message = message.copy().append(Text.literal("\n")).append(formatted("§c", "easypets.recovery.restricted_pets", restrictedPets));
         }
 
         if (!roamingPets.isEmpty()) {
-            message.append("\n§6").append(roamingPets.size()).append(" roaming pets (horses/llamas) found - they won't auto-teleport.");
+            message = message.copy().append(Text.literal("\n")).append(formatted("§6", "easypets.recovery.roaming_pets", roamingPets.size()));
         }
 
         if (!independentPets.isEmpty()) {
-            message.append("\n§d").append(independentPets.size()).append(" independent pets found - they won't auto-teleport or load chunks.");
+            message = message.copy().append(Text.literal("\n")).append(formatted("§d", "easypets.recovery.independent_pets", independentPets.size()));
         }
 
         if (!sittingPets.isEmpty()) {
-            message.append("\n§3").append(sittingPets.size()).append(" sitting pets found.");
+            message = message.copy().append(Text.literal("\n")).append(formatted("§3", "easypets.recovery.sitting_pets", sittingPets.size()));
         }
 
-        message.append("\n§3Use /petlocator to see coordinates of all pets.");
+        message = message.copy().append(Text.literal("\n")).append(formatted("§3", "easypets.recovery.use_locator"));
 
-        player.sendMessage(Text.of(message.toString()), false);
+        player.sendMessage(message, false);
     }
 
     private static int[] scanWorldForPets(ServerPlayerEntity player, ServerWorld world,
@@ -1073,19 +1083,19 @@ public class PetRecoveryCommand {
                             filesScanned++;
                             chunksScanned += chunks;
                         } catch (Exception e) {
-                            player.sendMessage(Text.of("§cError scanning " + regionPath.getFileName() + ": " + e.getMessage()), false);
+                            player.sendMessage(formatted("§c", "easypets.scan.region_error", regionPath.getFileName(), e.getMessage()), false);
                         }
                     }
 
                     String worldDisplayName = getWorldDisplayName(world);
-                    player.sendMessage(Text.of("§7Found " + regionFiles.size() + " " + worldDisplayName + " region files"), false);
+                    player.sendMessage(formatted("§7", "easypets.scan.world_found", regionFiles.size(), worldDisplayName), false);
 
                     break;
                 }
             }
 
         } catch (Exception e) {
-            player.sendMessage(Text.of("§cError scanning world " + world.getRegistryKey().getValue() + ": " + e.getMessage()), false);
+            player.sendMessage(formatted("§c", "easypets.scan.world_error", world.getRegistryKey().getValue(), e.getMessage()), false);
         }
 
         return new int[]{filesScanned, chunksScanned};
@@ -1138,14 +1148,14 @@ public class PetRecoveryCommand {
                                 String fullDimensionName = namespace + ":" + dimensionName;
 
                                 if (!knownDimensions.contains(dimensionName)) {
-                                    player.sendMessage(Text.of("§7Found custom dimension: " + fullDimensionName), false);
+                                    player.sendMessage(formatted("§7", "easypets.scan.custom_dimension", fullDimensionName), false);
 
                                     List<Path> regionFiles = Files.list(entitiesPath)
                                             .filter(path -> path.toString().endsWith(".mca"))
                                             .toList();
 
                                     if (!regionFiles.isEmpty()) {
-                                        player.sendMessage(Text.of("§7Found " + regionFiles.size() + " region files in " + fullDimensionName), false);
+                                        player.sendMessage(formatted("§7", "easypets.scan.custom_dimension_files", regionFiles.size(), fullDimensionName), false);
                                     }
                                 }
                             } catch (Exception e) {
@@ -1168,7 +1178,7 @@ public class PetRecoveryCommand {
             }
 
         } catch (Exception e) {
-            player.sendMessage(Text.of("§cError scanning additional dimensions: " + e.getMessage()), false);
+            player.sendMessage(formatted("§c", "easypets.scan.additional_error", e.getMessage()), false);
         }
 
         return new int[]{filesScanned, chunksScanned};
@@ -1183,7 +1193,7 @@ public class PetRecoveryCommand {
                         .toList();
 
                 if (!regionFiles.isEmpty()) {
-                    player.sendMessage(Text.of("§7Found " + regionFiles.size() + " " + dimensionName + " region files"), false);
+                    player.sendMessage(formatted("§7", "easypets.scan.world_found", regionFiles.size(), dimensionName), false);
                 }
             }
         } catch (Exception e) {

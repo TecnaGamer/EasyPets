@@ -17,6 +17,7 @@ import org.tecna.easypets.PetChunkTickets;
 import org.tecna.easypets.PetRecoveryCommand;
 import org.tecna.easypets.SimplePetTracker;
 import org.tecna.easypets.config.Config;
+import org.tecna.easypets.translation.TranslationManager;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -81,13 +82,13 @@ public class ServerPlayerEntityMixin implements SimplePetTracker {
         }
 
         // Send welcome message
-        player.sendMessage(Text.of("§e[EasyPets] Welcome! Running automatic pet recovery..."), false);
-        player.sendMessage(Text.of("§7This will only happen once. Use /petrecovery to run manually."), false);
+        player.sendMessage(Text.literal("§e[EasyPets] " + TranslationManager.getInstance().translate("easypets.auto_recovery.welcome")), false);
+        player.sendMessage(Text.literal("§7" + TranslationManager.getInstance().translate("easypets.auto_recovery.once")), false);
 
         // Optional save (if enabled) using the new SaveUtil
         if (config.shouldSaveOnRecovery()) {
             try {
-                player.sendMessage(Text.of("§7[EasyPets] Ensuring world is saved for accurate pet data..."), false);
+                player.sendMessage(Text.literal("§7[EasyPets] " + TranslationManager.getInstance().translate("easypets.auto_recovery.saving")), false);
 
                 // Use SaveUtil which executes vanilla save-all flush command
                 Boolean saveResult = org.tecna.easypets.util.SaveUtil.triggerFullSave(player.getEntityWorld().getServer()).get();

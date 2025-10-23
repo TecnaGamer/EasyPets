@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import org.tecna.easypets.translation.TranslationManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,125 +18,41 @@ public class ConfigCommand {
 
     // Complete setting information for all config options
     private static final Map<String, SettingInfo> SETTING_INFO = new HashMap<>();
+    
+    // Helper method to create formatted text using server-side translations
+    private static Text formatted(String color, String translationKey, Object... args) {
+        return TranslationManager.getInstance().text(color, translationKey, args);
+    }
 
     static {
-        // Core settings
-        SETTING_INFO.put("enableChunkLoading", new SettingInfo(
-                "enableChunkLoading", "boolean",
-                "Enable/disable the entire chunk loading system",
-                "Set to false to use only /petlocate without chunk loading",
-                "Server owners who want pets to locate but not load chunks"
-        ));
-
-        SETTING_INFO.put("teleportDistance", new SettingInfo(
-                "teleportDistance", "1.0-∞", // Updated range - now actually in blocks
-                "Distance in blocks before pets try to teleport to owner",
-                "Vanilla default is 12 blocks. Lower = pets stay closer",
-                "Adjust based on your server's playstyle preferences"
-        ));
-
-        SETTING_INFO.put("maxChunkDistance", new SettingInfo(
-                "maxChunkDistance", "1-10",
-                "Radius of chunks to keep loaded around each pet",
-                "Higher values increase server load but provide more stability",
-                "Only increase if pets are having chunk loading issues"
-        ));
-
-        SETTING_INFO.put("navigationScanningRange", new SettingInfo(
-                "navigationScanningRange", "8-1000",
-                "Maximum navigation range in blocks for pet pathfinding",
-                "Higher values let pets search further before teleporting",
-                "Increase if pets have trouble pathfinding, decrease for performance"
-        ));
-
-        // Auto-recovery option
-        SETTING_INFO.put("autoRecoverOnFirstJoin", new SettingInfo(
-                "autoRecoverOnFirstJoin", "boolean",
-                "Automatically run pet recovery when joining world for first time",
-                "Helps players find their pets when first installing the mod on existing worlds",
-                "Enable for user-friendly experience, disable if you prefer manual control"
-        ));
-
+        // Core settings - only store setting name and valid range, descriptions come from lang file
+        SETTING_INFO.put("enableChunkLoading", new SettingInfo("enableChunkLoading", "boolean"));
+        SETTING_INFO.put("teleportDistance", new SettingInfo("teleportDistance", "1.0-∞"));
+        SETTING_INFO.put("maxChunkDistance", new SettingInfo("maxChunkDistance", "1-10"));
+        SETTING_INFO.put("navigationScanningRange", new SettingInfo("navigationScanningRange", "8-1000"));
+        SETTING_INFO.put("autoRecoverOnFirstJoin", new SettingInfo("autoRecoverOnFirstJoin", "boolean"));
+        
         // Dynamic Pet Running settings
-        SETTING_INFO.put("enableDynamicRunning", new SettingInfo(
-                "enableDynamicRunning", "boolean",
-                "Enable/disable dynamic pet running adjustment system",
-                "Pets will run faster when you're moving fast and they're far away",
-                "Disable if you prefer vanilla pet following behavior"
-        ));
-
-        SETTING_INFO.put("runningTargetDistance", new SettingInfo(
-                "runningTargetDistance", "1.0-50.0",
-                "Distance in blocks where pets start running faster",
-                "Pets closer than this distance use normal speed",
-                "Lower values = pets run faster more often, higher = only when far"
-        ));
-
-        SETTING_INFO.put("maxRunningMultiplier", new SettingInfo(
-                "maxRunningMultiplier", "1.0-10.0",
-                "Maximum running speed multiplier when catching up",
-                "Higher values help pets keep up but may look unnatural",
-                "Adjust based on desired pet movement balance"
-        ));
-
-        SETTING_INFO.put("playerMovementThreshold", new SettingInfo(
-                "playerMovementThreshold", "0.01-1.0",
-                "Minimum player movement to trigger pet speed changes",
-                "Very low value - prevents speed changes from tiny movements",
-                "Technical setting, rarely needs adjustment"
-        ));
-
+        SETTING_INFO.put("enableDynamicRunning", new SettingInfo("enableDynamicRunning", "boolean"));
+        SETTING_INFO.put("runningTargetDistance", new SettingInfo("runningTargetDistance", "1.0-50.0"));
+        SETTING_INFO.put("maxRunningMultiplier", new SettingInfo("maxRunningMultiplier", "1.0-10.0"));
+        SETTING_INFO.put("playerMovementThreshold", new SettingInfo("playerMovementThreshold", "0.01-1.0"));
+        
         // Natural Regeneration settings
-        SETTING_INFO.put("enableNaturalRegen", new SettingInfo(
-                "enableNaturalRegen", "boolean",
-                "Enable/disable natural health regeneration for pets",
-                "Pets will slowly regenerate health when not taking damage",
-                "Enable for easier pet management, disable for vanilla behavior"
-        ));
-
-        SETTING_INFO.put("regenDelayTicks", new SettingInfo(
-                "regenDelayTicks", "20-6000",
-                "Delay in ticks before regeneration starts after taking damage",
-                "Higher values = longer wait after damage for balance",
-                "Increase if regen feels too overpowered, decrease for faster healing"
-        ));
-
-        SETTING_INFO.put("regenAmountPerSecond", new SettingInfo(
-                "regenAmountPerSecond", "0.01-5.0",
-                "Amount of health regenerated per second",
-                "Default is similar to horse regeneration speed",
-                "Adjust based on desired healing speed and game balance"
-        ));
-
-        SETTING_INFO.put("regenMaxHealthPercent", new SettingInfo(
-                "regenMaxHealthPercent", "0.1-1.0",
-                "Maximum health percentage to regenerate to",
-                "1.0 = 100% health, 0.8 = 80% health. Prevents full healing if desired",
-                "Set to less than 1.0 if you want pets to need some manual healing"
-        ));
-
+        SETTING_INFO.put("enableNaturalRegen", new SettingInfo("enableNaturalRegen", "boolean"));
+        SETTING_INFO.put("regenDelayTicks", new SettingInfo("regenDelayTicks", "20-6000"));
+        SETTING_INFO.put("regenAmountPerSecond", new SettingInfo("regenAmountPerSecond", "0.01-5.0"));
+        SETTING_INFO.put("regenMaxHealthPercent", new SettingInfo("regenMaxHealthPercent", "0.1-1.0"));
+        
         // Save options
-        SETTING_INFO.put("saveOnLocate", new SettingInfo(
-                "saveOnLocate", "boolean",
-                "Trigger world save when /petlocate is used",
-                "Ensures most accurate pet locations but makes command slower",
-                "Enable if pet locations are frequently inaccurate"
-        ));
-
-        SETTING_INFO.put("saveOnRecovery", new SettingInfo(
-                "saveOnRecovery", "boolean",
-                "Trigger world save before /petrecovery runs",
-                "Improves recovery success rate but makes command slower",
-                "Enable if pet recovery often fails to find pets"
-        ));
-
+        SETTING_INFO.put("saveOnLocate", new SettingInfo("saveOnLocate", "boolean"));
+        SETTING_INFO.put("saveOnRecovery", new SettingInfo("saveOnRecovery", "boolean"));
+        
+        // Language option - range will be dynamically determined
+        SETTING_INFO.put("language", new SettingInfo("language", "language code (e.g. en_us, es_es)"));
+        
         // Debug option
-        SETTING_INFO.put("enableDebugLogging", new SettingInfo(
-                "enableDebugLogging", "boolean",
-                "Enable detailed console logging for troubleshooting",
-                "Only enable when investigating issues - creates log spam",
-                "Disable after troubleshooting to reduce server logs"
-        ));
+        SETTING_INFO.put("enableDebugLogging", new SettingInfo("enableDebugLogging", "boolean"));
     }
 
     public static void register() {
@@ -150,7 +67,7 @@ public class ConfigCommand {
                                     .executes(ConfigCommand::executeResetAll))
                             .executes(context -> {
                                 // Show usage when just typing /petconfig reset
-                                context.getSource().sendMessage(Text.of("§7Usage: §f/petconfig reset all §7or §f/petconfig <setting> reset"));
+                                context.getSource().sendMessage(formatted("§7", "easypets.config.usage_hint"));
                                 return 1;
                             }))
                     .then(argument("setting", StringArgumentType.string())
@@ -217,6 +134,10 @@ public class ConfigCommand {
                                                     builder.suggest("0.8");   // 80%
                                                     builder.suggest("0.75");  // 75%
                                                     builder.suggest("0.5");   // 50%
+                                                } else if (settingName.equals("language")) {
+                                                    // Dynamically suggest available languages
+                                                    TranslationManager.getInstance().getAvailableLanguages()
+                                                            .forEach(builder::suggest);
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -328,53 +249,62 @@ public class ConfigCommand {
         ServerCommandSource source = context.getSource();
         Config config = Config.getInstance();
 
-        source.sendMessage(Text.of("§e=== EasyPets Configuration ==="));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§7Use §f/petconfig <setting>§7 to see details about a specific setting"));
-        source.sendMessage(Text.of("§7Use §f/petconfig <setting> <value>§7 to change a setting"));
-        source.sendMessage(Text.of("§7Use §f/petconfig <setting> reset§7 to reset a setting"));
-        source.sendMessage(Text.of("§7Use §f/petconfig reset all§7 to reset all settings"));
-        source.sendMessage(Text.of(""));
+        source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.config.title") + " ==="));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§7", "easypets.config.usage_view"));
+        source.sendMessage(formatted("§7", "easypets.config.usage_change"));
+        source.sendMessage(formatted("§7", "easypets.config.usage_reset"));
+        source.sendMessage(formatted("§7", "easypets.config.usage_reset_all"));
+        source.sendMessage(Text.empty());
 
         // Core Features
-        source.sendMessage(Text.of("§6Core Features:"));
-        source.sendMessage(Text.of("§f  enableChunkLoading: §" + (config.isChunkLoadingEnabled() ? "aEnabled" : "cDisabled")));
-        source.sendMessage(Text.of("§f  teleportDistance: §b" + config.getTeleportDistance() + " blocks"));
-        source.sendMessage(Text.of("§f  maxChunkDistance: §b" + config.getMaxChunkDistance() + " chunks"));
-        source.sendMessage(Text.of("§f  navigationScanningRange: §b" + config.getNavigationScanningRange() + " blocks"));
-        source.sendMessage(Text.of("§f  autoRecoverOnFirstJoin: §" + (config.shouldAutoRecoverOnFirstJoin() ? "aEnabled" : "cDisabled")));
-        source.sendMessage(Text.of(""));
+        source.sendMessage(formatted("§6", "easypets.config.category.core"));
+        String enabledStr = TranslationManager.getInstance().translate("easypets.config.enabled");
+        String disabledStr = TranslationManager.getInstance().translate("easypets.config.disabled");
+        
+        source.sendMessage(Text.literal("§f  enableChunkLoading: §" + (config.isChunkLoadingEnabled() ? "a" + enabledStr : "c" + disabledStr)));
+        source.sendMessage(Text.literal("§f  teleportDistance: §b" + config.getTeleportDistance() + " blocks"));
+        source.sendMessage(Text.literal("§f  maxChunkDistance: §b" + config.getMaxChunkDistance() + " chunks"));
+        source.sendMessage(Text.literal("§f  navigationScanningRange: §b" + config.getNavigationScanningRange() + " blocks"));
+        source.sendMessage(Text.literal("§f  autoRecoverOnFirstJoin: §" + (config.shouldAutoRecoverOnFirstJoin() ? "a" + enabledStr : "c" + disabledStr)));
+        source.sendMessage(Text.empty());
 
         // Dynamic Pet Running
-        source.sendMessage(Text.of("§6Dynamic Pet Running:"));
-        source.sendMessage(Text.of("§f  enableDynamicRunning: §" + (config.isDynamicRunningEnabled() ? "aEnabled" : "cDisabled")));
+        source.sendMessage(formatted("§6", "easypets.config.category.running"));
+        source.sendMessage(Text.literal("§f  enableDynamicRunning: §" + (config.isDynamicRunningEnabled() ? "a" + enabledStr : "c" + disabledStr)));
         if (config.isDynamicRunningEnabled()) {
-            source.sendMessage(Text.of("§f  runningTargetDistance: §b" + config.getRunningTargetDistance() + " blocks"));
-            source.sendMessage(Text.of("§f  maxRunningMultiplier: §b" + config.getMaxRunningMultiplier() + "x"));
-            source.sendMessage(Text.of("§f  playerMovementThreshold: §b" + config.getPlayerMovementThreshold()));
+            source.sendMessage(Text.literal("§f  runningTargetDistance: §b" + config.getRunningTargetDistance() + " blocks"));
+            source.sendMessage(Text.literal("§f  maxRunningMultiplier: §b" + config.getMaxRunningMultiplier() + "x"));
+            source.sendMessage(Text.literal("§f  playerMovementThreshold: §b" + config.getPlayerMovementThreshold()));
         }
-        source.sendMessage(Text.of(""));
+        source.sendMessage(Text.empty());
 
         // Natural Regeneration
-        source.sendMessage(Text.of("§6Natural Regeneration:"));
-        source.sendMessage(Text.of("§f  enableNaturalRegen: §" + (config.isNaturalRegenEnabled() ? "aEnabled" : "cDisabled")));
+        source.sendMessage(formatted("§6", "easypets.config.category.regen"));
+        source.sendMessage(Text.literal("§f  enableNaturalRegen: §" + (config.isNaturalRegenEnabled() ? "a" + enabledStr : "c" + disabledStr)));
         if (config.isNaturalRegenEnabled()) {
-            source.sendMessage(Text.of("§f  regenDelayTicks: §b" + config.getRegenDelayTicks() + " ticks §7(" + (config.getRegenDelayTicks() / 20.0) + "s)"));
-            source.sendMessage(Text.of("§f  regenAmountPerSecond: §b" + config.getRegenAmountPerSecond() + " health/sec"));
-            source.sendMessage(Text.of("§f  regenMaxHealthPercent: §b" + (config.getRegenMaxHealthPercent() * 100) + "%"));
+            source.sendMessage(Text.literal("§f  regenDelayTicks: §b" + config.getRegenDelayTicks() + " ticks §7(" + (config.getRegenDelayTicks() / 20.0) + "s)"));
+            source.sendMessage(Text.literal("§f  regenAmountPerSecond: §b" + config.getRegenAmountPerSecond() + " health/sec"));
+            source.sendMessage(Text.literal("§f  regenMaxHealthPercent: §b" + (config.getRegenMaxHealthPercent() * 100) + "%"));
         }
-        source.sendMessage(Text.of(""));
+        source.sendMessage(Text.empty());
 
         // Save Options
-        source.sendMessage(Text.of("§6Save Options:"));
-        source.sendMessage(Text.of("§f  saveOnLocate: §" + (config.shouldSaveOnLocate() ? "aEnabled" : "cDisabled")));
-        source.sendMessage(Text.of("§f  saveOnRecovery: §" + (config.shouldSaveOnRecovery() ? "aEnabled" : "cDisabled")));
-        source.sendMessage(Text.of(""));
+        source.sendMessage(formatted("§6", "easypets.config.category.save"));
+        source.sendMessage(Text.literal("§f  saveOnLocate: §" + (config.shouldSaveOnLocate() ? "a" + enabledStr : "c" + disabledStr)));
+        source.sendMessage(Text.literal("§f  saveOnRecovery: §" + (config.shouldSaveOnRecovery() ? "a" + enabledStr : "c" + disabledStr)));
+        source.sendMessage(Text.empty());
+        
+        // Language
+        source.sendMessage(formatted("§6", "Language:"));
+        var availableLangs = TranslationManager.getInstance().getAvailableLanguages();
+        source.sendMessage(Text.literal("§f  language: §b" + config.getLanguage() + " §7(" + availableLangs.size() + " available)"));
+        source.sendMessage(Text.empty());
 
         // Debug
-        source.sendMessage(Text.of("§6Debug:"));
-        source.sendMessage(Text.of("§f  enableDebugLogging: §" + (config.isDebugLoggingEnabled() ? "aEnabled" : "cDisabled")));
-        source.sendMessage(Text.of(""));
+        source.sendMessage(formatted("§6", "easypets.config.category.debug"));
+        source.sendMessage(Text.literal("§f  enableDebugLogging: §" + (config.isDebugLoggingEnabled() ? "a" + enabledStr : "c" + disabledStr)));
+        source.sendMessage(Text.empty());
 
         return 1;
     }
@@ -385,8 +315,8 @@ public class ConfigCommand {
 
         SettingInfo info = SETTING_INFO.get(settingName);
         if (info == null) {
-            source.sendError(Text.of("§cUnknown setting: " + settingName));
-            source.sendMessage(Text.of("§7Available settings: " + String.join(", ", SETTING_INFO.keySet())));
+            source.sendError(formatted("§c", "easypets.command.error.unknown_setting", settingName));
+            source.sendMessage(formatted("§7", "easypets.config.available_settings", String.join(", ", SETTING_INFO.keySet())));
             return 0;
         }
 
@@ -394,24 +324,31 @@ public class ConfigCommand {
         String currentValue = getCurrentValue(config, settingName);
         String defaultValue = getDefaultValue(settingName);
 
-        source.sendMessage(Text.of("§e=== " + info.name + " ==="));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§6Current Value: §f" + currentValue));
-        source.sendMessage(Text.of("§6Default Value: §7" + defaultValue));
-        source.sendMessage(Text.of("§6Valid Range: §7" + info.validRange));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§6Description:"));
-        source.sendMessage(Text.of("§f  " + info.description));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§6Details:"));
-        source.sendMessage(Text.of("§f  " + info.details));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§6When to Use:"));
-        source.sendMessage(Text.of("§f  " + info.whenToUse));
-        source.sendMessage(Text.of(""));
-        source.sendMessage(Text.of("§7Commands:"));
-        source.sendMessage(Text.of("§7  /petconfig " + settingName + " <value> §7- Change setting"));
-        source.sendMessage(Text.of("§7  /petconfig " + settingName + " reset §7- Reset to default"));
+        source.sendMessage(Text.literal("§e=== " + TranslationManager.getInstance().translate("easypets.config.setting.title", info.name) + " ==="));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§6", "easypets.config.setting.current_value", "§f" + currentValue));
+        source.sendMessage(formatted("§6", "easypets.config.setting.default_value", "§7" + defaultValue));
+        
+        // For language setting, show available languages instead of generic range
+        if (settingName.equals("language")) {
+            var availableLanguages = TranslationManager.getInstance().getAvailableLanguages();
+            source.sendMessage(formatted("§6", "easypets.config.setting.valid_range", "§7" + String.join(", ", availableLanguages)));
+        } else {
+            source.sendMessage(formatted("§6", "easypets.config.setting.valid_range", "§7" + info.validRange));
+        }
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§6", "easypets.config.setting.description"));
+        source.sendMessage(Text.literal("§f  " + TranslationManager.getInstance().translate("easypets.config.setting." + settingName + ".description")));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§6", "easypets.config.setting.details"));
+        source.sendMessage(Text.literal("§f  " + TranslationManager.getInstance().translate("easypets.config.setting." + settingName + ".details")));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§6", "easypets.config.setting.when_to_use"));
+        source.sendMessage(Text.literal("§f  " + TranslationManager.getInstance().translate("easypets.config.setting." + settingName + ".when_to_use")));
+        source.sendMessage(Text.empty());
+        source.sendMessage(formatted("§7", "easypets.config.setting.commands"));
+        source.sendMessage(formatted("§7", "easypets.config.setting.command_change", settingName));
+        source.sendMessage(formatted("§7", "easypets.config.setting.command_reset", settingName));
 
         return 1;
     }
@@ -423,7 +360,7 @@ public class ConfigCommand {
 
         SettingInfo info = SETTING_INFO.get(settingName);
         if (info == null) {
-            source.sendError(Text.of("§cUnknown setting: " + settingName));
+            source.sendError(formatted("§c", "easypets.command.error.unknown_setting", settingName));
             return 0;
         }
 
@@ -433,17 +370,17 @@ public class ConfigCommand {
             boolean success = setSetting(config, settingName, value);
             if (success) {
                 config.saveConfig();
-                source.sendMessage(Text.of("§a[EasyPets] " + info.name + " set to: " + value));
+                source.sendMessage(formatted("§a", "easypets.config.set_success", info.name, value));
 
                 // Show any relevant warnings or notes
                 showSettingWarnings(source, settingName, value);
             } else {
-                source.sendError(Text.of("§cInvalid value '" + value + "' for " + settingName));
-                source.sendMessage(Text.of("§7Valid range: " + info.validRange));
+                source.sendError(formatted("§c", "easypets.command.error.invalid_value", value, settingName));
+                source.sendMessage(formatted("§7", "easypets.config.setting.valid_range", info.validRange));
             }
         } catch (Exception e) {
-            source.sendError(Text.of("§cError setting " + settingName + ": " + e.getMessage()));
-            source.sendMessage(Text.of("§7Valid range: " + info.validRange));
+            source.sendError(formatted("§c", "easypets.command.error.setting_failed", settingName, e.getMessage()));
+            source.sendMessage(formatted("§7", "easypets.config.setting.valid_range", info.validRange));
         }
 
         return 1;
@@ -455,7 +392,7 @@ public class ConfigCommand {
 
         SettingInfo info = SETTING_INFO.get(settingName);
         if (info == null) {
-            source.sendError(Text.of("§cUnknown setting: " + settingName));
+            source.sendError(formatted("§c", "easypets.command.error.unknown_setting", settingName));
             return 0;
         }
 
@@ -465,9 +402,9 @@ public class ConfigCommand {
         boolean success = setSetting(config, settingName, defaultValue);
         if (success) {
             config.saveConfig();
-            source.sendMessage(Text.of("§a[EasyPets] " + info.name + " reset to default: " + defaultValue));
+            source.sendMessage(formatted("§a", "easypets.config.reset_success", info.name, defaultValue));
         } else {
-            source.sendError(Text.of("§cFailed to reset " + settingName));
+            source.sendError(formatted("§c", "easypets.command.error.reset_failed", settingName));
         }
 
         return 1;
@@ -481,8 +418,8 @@ public class ConfigCommand {
         resetAllSettings(config);
         config.saveConfig();
 
-        source.sendMessage(Text.of("§a[EasyPets] All settings have been reset to default values"));
-        source.sendMessage(Text.of("§7Use §f/petconfig§7 to view the current configuration"));
+        source.sendMessage(formatted("§a", "easypets.config.reset_all_success"));
+        source.sendMessage(formatted("§7", "easypets.config.reset_all_hint"));
 
         return 1;
     }
@@ -491,7 +428,7 @@ public class ConfigCommand {
         ServerCommandSource source = context.getSource();
 
         Config.getInstance().reloadConfig();
-        source.sendMessage(Text.of("§a[EasyPets] Configuration reloaded successfully"));
+        source.sendMessage(formatted("§a", "easypets.config.reload_success"));
 
         return 1;
     }
@@ -524,6 +461,7 @@ public class ConfigCommand {
             case "saveOnLocate" -> String.valueOf(config.shouldSaveOnLocate());
             case "saveOnRecovery" -> String.valueOf(config.shouldSaveOnRecovery());
             case "enableDebugLogging" -> String.valueOf(config.isDebugLoggingEnabled());
+            case "language" -> config.getLanguage();
             default -> "unknown";
         };
     }
@@ -622,6 +560,14 @@ public class ConfigCommand {
                     config.enableDebugLogging = Boolean.parseBoolean(value);
                     return true;
                 }
+                case "language" -> {
+                    // Normalize language code
+                    String normalizedLang = value.toLowerCase().replace("-", "_");
+                    config.language = normalizedLang;
+                    // Reload translations with new language
+                    TranslationManager.getInstance().reloadLanguage(normalizedLang);
+                    return true;
+                }
             }
         } catch (NumberFormatException e) {
             // Invalid number format
@@ -633,102 +579,97 @@ public class ConfigCommand {
         switch (settingName) {
             case "enableChunkLoading" -> {
                 if (!Boolean.parseBoolean(value)) {
-                    source.sendMessage(Text.of("§7Note: Existing chunk tickets will auto-expire in 5 seconds"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.chunk_loading_disabled"));
                 }
             }
             case "autoRecoverOnFirstJoin" -> {
                 if (!Boolean.parseBoolean(value)) {
-                    source.sendMessage(Text.of("§7Note: Players will need to manually run /petrecovery when they first join"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.auto_recover_disabled"));
                 } else {
-                    source.sendMessage(Text.of("§7Note: Pet recovery will automatically run 5 seconds after first join"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.auto_recover_enabled"));
                 }
             }
             case "enableDynamicRunning" -> {
                 if (!Boolean.parseBoolean(value)) {
-                    source.sendMessage(Text.of("§7Note: Pet speeds will return to vanilla behavior"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.dynamic_running_disabled"));
                 }
             }
             case "enableNaturalRegen" -> {
                 if (!Boolean.parseBoolean(value)) {
-                    source.sendMessage(Text.of("§7Note: Pets will no longer regenerate health automatically"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.natural_regen_disabled"));
                 }
             }
             case "enableDebugLogging" -> {
                 if (Boolean.parseBoolean(value)) {
-                    source.sendMessage(Text.of("§7Warning: Debug logging will create additional console output"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.debug_logging_enabled"));
                 }
             }
             case "maxChunkDistance" -> {
                 int distance = Integer.parseInt(value);
                 if (distance > 4) {
-                    source.sendMessage(Text.of("§7Warning: High chunk distances may impact server performance"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.high_chunk_distance"));
                 }
             }
             case "navigationScanningRange" -> {
                 int range = Integer.parseInt(value);
                 if (range > 300) {
-                    source.sendMessage(Text.of("§7Warning: Very high navigation ranges may cause server lag"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.high_navigation_range"));
                 } else if (range < 16) {
-                    source.sendMessage(Text.of("§7Note: Very low navigation ranges may cause pets to pathfind poorly"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.low_navigation_range"));
                 }
             }
             case "teleportDistance" -> {
                 double distance = Double.parseDouble(value);
                 if (distance < 8.0) {
-                    source.sendMessage(Text.of("§7Note: Very low teleport distances may cause pets to teleport frequently"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.low_teleport_distance"));
                 } else if (distance > 48.0) {
-                    source.sendMessage(Text.of("§7Note: Very high teleport distances may cause pets to get lost more easily"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.high_teleport_distance"));
                 }
             }
             case "maxRunningMultiplier" -> {
                 double multiplier = Double.parseDouble(value);
                 if (multiplier > 2.0) {
-                    source.sendMessage(Text.of("§7Warning: Very high running multipliers may look unnatural or cause pathfinding issues"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.high_running_multiplier"));
                 }
             }
             case "runningTargetDistance" -> {
                 double minDist = Double.parseDouble(value);
                 if (minDist < 4.0) {
-                    source.sendMessage(Text.of("§7Note: Very low target distances may cause frequent speed changes"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.low_target_distance"));
                 }
             }
             case "regenAmountPerSecond" -> {
                 float amount = Float.parseFloat(value);
                 if (amount > 1.0f) {
-                    source.sendMessage(Text.of("§7Warning: Very high regeneration rates may make pets overpowered"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.high_regen_rate"));
                 }
             }
             case "regenDelayTicks" -> {
                 int delay = Integer.parseInt(value);
                 if (delay < 100) {
-                    source.sendMessage(Text.of("§7Note: Very short delays may make pets regenerate too quickly after damage"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.short_regen_delay"));
                 } else if (delay > 1200) {
-                    source.sendMessage(Text.of("§7Note: Very long delays may make regeneration feel unresponsive"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.long_regen_delay"));
                 }
             }
             case "regenMaxHealthPercent" -> {
                 float percent = Float.parseFloat(value);
                 if (percent < 0.8f) {
-                    source.sendMessage(Text.of("§7Note: Low max health percentages mean pets will need manual healing"));
+                    source.sendMessage(formatted("§7", "easypets.config.warning.low_max_health"));
                 }
             }
         }
     }
 
     // Helper class for storing setting information
+    // Descriptions, details, and whenToUse are now loaded from lang file dynamically
     private static class SettingInfo {
         final String name;
         final String validRange;
-        final String description;
-        final String details;
-        final String whenToUse;
 
-        SettingInfo(String name, String validRange, String description, String details, String whenToUse) {
+        SettingInfo(String name, String validRange) {
             this.name = name;
             this.validRange = validRange;
-            this.description = description;
-            this.details = details;
-            this.whenToUse = whenToUse;
         }
     }
 }

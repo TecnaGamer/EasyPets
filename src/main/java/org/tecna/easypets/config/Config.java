@@ -39,6 +39,9 @@ public class Config {
     // Save options
     public boolean saveOnLocate = true;
     public boolean saveOnRecovery = true;
+    
+    // Language setting
+    public String language = "en_us"; // Default to English
 
     private Config() {}
 
@@ -104,6 +107,13 @@ public class Config {
 
         if (regenMaxHealthPercent < 0.1f) regenMaxHealthPercent = 0.1f;
         if (regenMaxHealthPercent > 1.0f) regenMaxHealthPercent = 1.0f;
+        
+        // Language validation - ensure lowercase with underscore
+        if (language == null || language.isEmpty()) {
+            language = "en_us";
+        } else {
+            language = language.toLowerCase().replace("-", "_");
+        }
     }
 
     public void saveConfig() {
@@ -144,6 +154,7 @@ public class Config {
             case "saveOnLocate" -> String.valueOf(defaultConfig.saveOnLocate);
             case "saveOnRecovery" -> String.valueOf(defaultConfig.saveOnRecovery);
             case "enableDebugLogging" -> String.valueOf(defaultConfig.enableDebugLogging);
+            case "language" -> defaultConfig.language;
             default -> "unknown";
         };
     }
@@ -169,6 +180,7 @@ public class Config {
         this.saveOnLocate = defaultConfig.saveOnLocate;
         this.saveOnRecovery = defaultConfig.saveOnRecovery;
         this.enableDebugLogging = defaultConfig.enableDebugLogging;
+        this.language = defaultConfig.language;
     }
 
     // Essential getters only
@@ -192,6 +204,9 @@ public class Config {
     public int getRegenDelayTicks() { return regenDelayTicks; }
     public float getRegenAmountPerSecond() { return regenAmountPerSecond; }
     public float getRegenMaxHealthPercent() { return regenMaxHealthPercent; }
+    
+    // Language getter
+    public String getLanguage() { return language; }
 
     // FIXED: Now actually returns squared distance in blocks, not chunks
     public double getTeleportDistanceSquared() {
