@@ -42,6 +42,9 @@ public class Config {
     
     // Language setting
     public String language = "en_us"; // Default to English
+    
+    // Find pets glow duration
+    public int glowDurationSeconds = 30; // Duration in seconds for pet glow effects
 
     private Config() {}
 
@@ -114,6 +117,10 @@ public class Config {
         } else {
             language = language.toLowerCase().replace("-", "_");
         }
+        
+        // Glow duration validation
+        if (glowDurationSeconds < 5) glowDurationSeconds = 5; // Minimum 5 seconds
+        if (glowDurationSeconds > 300) glowDurationSeconds = 300; // Maximum 5 minutes
     }
 
     public void saveConfig() {
@@ -155,6 +162,7 @@ public class Config {
             case "saveOnRecovery" -> String.valueOf(defaultConfig.saveOnRecovery);
             case "enableDebugLogging" -> String.valueOf(defaultConfig.enableDebugLogging);
             case "language" -> defaultConfig.language;
+            case "glowDurationSeconds" -> String.valueOf(defaultConfig.glowDurationSeconds);
             default -> "unknown";
         };
     }
@@ -181,6 +189,7 @@ public class Config {
         this.saveOnRecovery = defaultConfig.saveOnRecovery;
         this.enableDebugLogging = defaultConfig.enableDebugLogging;
         this.language = defaultConfig.language;
+        this.glowDurationSeconds = defaultConfig.glowDurationSeconds;
     }
 
     // Essential getters only
@@ -207,6 +216,9 @@ public class Config {
     
     // Language getter
     public String getLanguage() { return language; }
+    
+    // Glow duration getter
+    public int getGlowDurationSeconds() { return glowDurationSeconds; }
 
     // FIXED: Now actually returns squared distance in blocks, not chunks
     public double getTeleportDistanceSquared() {

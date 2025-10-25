@@ -51,6 +51,9 @@ public class ConfigCommand {
         // Language option - range will be dynamically determined
         SETTING_INFO.put("language", new SettingInfo("language", "language code (e.g. en_us, es_es)"));
         
+        // Find pets glow duration
+        SETTING_INFO.put("glowDurationSeconds", new SettingInfo("glowDurationSeconds", "5-300"));
+        
         // Debug option
         SETTING_INFO.put("enableDebugLogging", new SettingInfo("enableDebugLogging", "boolean"));
     }
@@ -138,6 +141,11 @@ public class ConfigCommand {
                                                     // Dynamically suggest available languages
                                                     TranslationManager.getInstance().getAvailableLanguages()
                                                             .forEach(builder::suggest);
+                                                } else if (settingName.equals("glowDurationSeconds")) {
+                                                    builder.suggest("30");   // Default
+                                                    builder.suggest("15");   // Short
+                                                    builder.suggest("60");   // Long
+                                                    builder.suggest("120");  // Very long
                                                 }
                                             }
                                         } catch (Exception e) {
@@ -299,6 +307,11 @@ public class ConfigCommand {
         source.sendMessage(formatted("§6", "Language:"));
         var availableLangs = TranslationManager.getInstance().getAvailableLanguages();
         source.sendMessage(Text.literal("§f  language: §b" + config.getLanguage() + " §7(" + availableLangs.size() + " available)"));
+        source.sendMessage(Text.empty());
+        
+        // Find Pets
+        source.sendMessage(formatted("§6", "Find Pets:"));
+        source.sendMessage(Text.literal("§f  glowDurationSeconds: §b" + config.getGlowDurationSeconds() + " seconds"));
         source.sendMessage(Text.empty());
 
         // Debug
@@ -462,6 +475,7 @@ public class ConfigCommand {
             case "saveOnRecovery" -> String.valueOf(config.shouldSaveOnRecovery());
             case "enableDebugLogging" -> String.valueOf(config.isDebugLoggingEnabled());
             case "language" -> config.getLanguage();
+            case "glowDurationSeconds" -> String.valueOf(config.getGlowDurationSeconds());
             default -> "unknown";
         };
     }
@@ -566,6 +580,14 @@ public class ConfigCommand {
                     config.language = normalizedLang;
                     // Reload translations with new language
                     TranslationManager.getInstance().reloadLanguage(normalizedLang);
+                    return true;
+                }
+                case "glowDurationSeconds" -> {
+                    int duration = Integer.parseInt(value);
+                    if (duration < 5 || duration > 300) {
+                        return false; // Invalid range
+                    }
+                    config.glowDurationSeconds = duration;
                     return true;
                 }
             }
