@@ -102,5 +102,6 @@ Every feature can be toggled or fine-tuned with `/petconfig <setting> <value>`
 Found a bug or have a suggestion?  
 👉 [Report it on GitHub Issues](https://github.com/TecnaGamer/easypets/issues)  
 💬 [Join the Discord](https://discord.gg/TanrrCmRCa) to chat, get support, or share ideas  
+🌙 [Test the latest builds](https://github.com/TecnaGamer/EasyPets/actions/workflows/build.yml)
 
 ---
