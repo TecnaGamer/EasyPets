@@ -2,6 +2,7 @@
   "easypets.command.error.players_only": "This command can only be run by players",
   "easypets.command.error.already_scanning": "You are already running a pet scan. Please wait for it to complete.",
   "easypets.command.error.player_not_found": "Player not found",
+  "easypets.command.error.entity_not_found": "Entity not found",
   "easypets.command.error.unknown_setting": "Unknown setting: %s",
   "easypets.command.error.invalid_value": "Invalid value '%s' for %s",
   "easypets.command.error.setting_failed": "Error setting %s: %s",
@@ -253,5 +254,43 @@
   
   "easypets.auto_recovery.welcome": "Welcome! Running automatic pet recovery...",
   "easypets.auto_recovery.once": "This will only happen once. Use /petrecovery to run manually.",
-  "easypets.auto_recovery.saving": "Ensuring world is saved for accurate pet data..."
+  "easypets.auto_recovery.saving": "Ensuring world is saved for accurate pet data...",
+  
+  "easypets.calmpets.success": "Calmed %s attacking pets!",
+  "easypets.calmpets.pets_calmed": "Calmed pets: %s",
+  "easypets.calmpets.explanation": "Your pets have stopped attacking and targets have been whitelisted to prevent re-targeting.",
+  "easypets.calmpets.no_attacking_pets": "No pets were currently attacking anything.",
+  
+  "easypets.petwhitelist.title": "Pet Whitelist Commands",
+  "easypets.petwhitelist.help.add": "/petwhitelist add <entities> - Prevent your pets from attacking entities",
+  "easypets.petwhitelist.help.remove": "/petwhitelist remove <entities> - Allow your pets to attack entities again",
+  "easypets.petwhitelist.help.list": "/petwhitelist list - Show your current whitelist",
+  "easypets.petwhitelist.help.clear": "/petwhitelist clear - Clear your entire whitelist",
+  "easypets.petwhitelist.help.explanation": "Whitelisted players and entities will not be attacked by your pets.",
+  "easypets.petwhitelist.help.examples": "Examples: Steve, @p, @a[team=friendly], @e[type=zombie], UUID from tab-completing while looking at entity",
+  
+  "easypets.petwhitelist.player_added": "Added %s to your pet whitelist. Your pets will not attack them.",
+  "easypets.petwhitelist.player_already_whitelisted": "%s is already whitelisted.",
+  "easypets.petwhitelist.player_removed": "Removed %s from your pet whitelist. Your pets can attack them again.",
+  "easypets.petwhitelist.player_not_whitelisted": "%s was not in your whitelist.",
+  "easypets.petwhitelist.entity_added": "Added %s to your pet whitelist. Your pets will not attack them.",
+  "easypets.petwhitelist.entity_already_whitelisted": "%s is already whitelisted.",
+  "easypets.petwhitelist.entity_removed": "Removed %s from your pet whitelist. Your pets can attack them again.",
+  "easypets.petwhitelist.entity_not_whitelisted": "%s was not in your whitelist.",
+  
+  "easypets.petwhitelist.error.cannot_whitelist_self": "You cannot whitelist yourself.",
+  "easypets.petwhitelist.error.invalid_entity_type": "Invalid entity type: %s",
+  
+  "easypets.petwhitelist.list_title": "Your Pet Whitelist",
+  "easypets.petwhitelist.list_players": "Whitelisted Players (%s):",
+  "easypets.petwhitelist.list_player_online": "  • %s (online)",
+  "easypets.petwhitelist.list_player_offline": "  • %s (offline)",
+  "easypets.petwhitelist.list_entities": "Whitelisted Entity Types (%s):",
+  "easypets.petwhitelist.list_entity": "  • %s",
+  "easypets.petwhitelist.list_entity_uuids": "Whitelisted Specific Entities (%s):",
+  "easypets.petwhitelist.list_entity_uuid": "  • %s",
+  "easypets.petwhitelist.list_empty": "Your whitelist is empty. Use /petwhitelist add to add entries.",
+  
+  "easypets.petwhitelist.cleared": "Cleared your pet whitelist (%s entries removed).",
+  "easypets.petwhitelist.already_empty": "Your pet whitelist is already empty."
 }

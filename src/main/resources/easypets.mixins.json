@@ -7,6 +7,7 @@
     "DynamicRunningMixin",
     "FollowOwnerGoalMixin",
     "PetNaturalRegenMixin",
+    "PetTargetingMixin",
     "PlayerManagerMixin",
     "ServerPlayerEntityMixin",
     "TameableEntityMixin",
