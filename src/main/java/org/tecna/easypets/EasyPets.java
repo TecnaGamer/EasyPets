@@ -21,6 +21,7 @@ public class EasyPets implements ModInitializer {
         ConfigCommand.register();
         CalmPetsCommand.register();
         PetWhitelistCommand.register();
+        EasyPetsHelpCommand.register();
 
         // Register server shutdown handler to clean up glow sessions
         ServerLifecycleEvents.SERVER_STOPPING.register((server) -> {
